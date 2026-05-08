@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { desc } from "drizzle-orm";
 import { getDb } from "../../lib/db";
@@ -55,24 +56,28 @@ export default async function TripsPage() {
       ) : (
         <ul style={{ listStyle: "none", padding: 0 }}>
           {allTrips.map((t) => (
-            <li
-              key={t.id}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: 8,
-                padding: "0.75rem 1rem",
-                marginBottom: "0.5rem",
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{t.name}</div>
-              {t.destination && (
-                <div style={{ color: "#444", fontSize: "0.9rem" }}>{t.destination}</div>
-              )}
-              {(t.startDate || t.endDate) && (
-                <div style={{ color: "#666", fontSize: "0.85rem" }}>
-                  {t.startDate ?? "?"} → {t.endDate ?? "?"}
-                </div>
-              )}
+            <li key={t.id} style={{ marginBottom: "0.5rem" }}>
+              <Link
+                href={`/trips/${t.id}`}
+                style={{
+                  display: "block",
+                  border: "1px solid #ddd",
+                  borderRadius: 8,
+                  padding: "0.75rem 1rem",
+                  textDecoration: "none",
+                  color: "inherit",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{t.name}</div>
+                {t.destination && (
+                  <div style={{ color: "#444", fontSize: "0.9rem" }}>{t.destination}</div>
+                )}
+                {(t.startDate || t.endDate) && (
+                  <div style={{ color: "#666", fontSize: "0.85rem" }}>
+                    {t.startDate ?? "?"} → {t.endDate ?? "?"}
+                  </div>
+                )}
+              </Link>
             </li>
           ))}
         </ul>
