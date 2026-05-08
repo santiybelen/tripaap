@@ -1,21 +1,22 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        padding: "3rem 1.5rem",
-        maxWidth: "720px",
-        margin: "0 auto",
-        lineHeight: 1.6,
-      }}
-    >
-      <h1 style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>Tripaap</h1>
-      <p style={{ fontSize: "1.125rem", color: "#444" }}>
-        Organizá viajes en grupo — vuelos, hoteles, autos, excursiones, restaurantes — en un solo lugar.
+    <main className="mx-auto max-w-3xl px-6 py-20">
+      <h1 className="text-5xl font-bold tracking-tight">Tripaap</h1>
+      <p className="mt-4 text-lg leading-relaxed text-slate-700">
+        Organizá viajes en grupo — vuelos, hoteles, autos, excursiones,
+        restaurantes — en un solo lugar.
       </p>
-      <p style={{ marginTop: "2rem", color: "#888", fontSize: "0.9rem" }}>
-        En construcción.
-      </p>
+      <div className="mt-10">
+        <Link
+          href="/trips"
+          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-white shadow-sm transition hover:bg-slate-800"
+        >
+          Ver mis viajes
+          <span aria-hidden>→</span>
+        </Link>
+      </div>
     </main>
   );
 }

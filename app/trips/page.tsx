@@ -36,44 +36,37 @@ export default async function TripsPage() {
   }
 
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        padding: "3rem 1.5rem",
-        maxWidth: "720px",
-        margin: "0 auto",
-        lineHeight: 1.6,
-      }}
-    >
-      <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>Trips</h1>
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <div className="flex items-center justify-between">
+        <Link href="/" className="text-sm text-slate-500 hover:text-slate-700">
+          ← Inicio
+        </Link>
+      </div>
+
+      <h1 className="mt-2 text-3xl font-bold tracking-tight">Mis viajes</h1>
 
       {loadError ? (
-        <p style={{ color: "#b00" }}>
-          Error al leer la DB: <code>{loadError}</code>
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Error al leer la DB: <code className="font-mono">{loadError}</code>
         </p>
       ) : allTrips.length === 0 ? (
-        <p style={{ color: "#666" }}>No hay viajes todavía. Sumá el primero abajo.</p>
+        <p className="mt-6 text-slate-600">
+          No hay viajes todavía. Sumá el primero abajo.
+        </p>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
+        <ul className="mt-6 space-y-2">
           {allTrips.map((t) => (
-            <li key={t.id} style={{ marginBottom: "0.5rem" }}>
+            <li key={t.id}>
               <Link
                 href={`/trips/${t.id}`}
-                style={{
-                  display: "block",
-                  border: "1px solid #ddd",
-                  borderRadius: 8,
-                  padding: "0.75rem 1rem",
-                  textDecoration: "none",
-                  color: "inherit",
-                }}
+                className="block rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-400 hover:shadow-sm"
               >
-                <div style={{ fontWeight: 600 }}>{t.name}</div>
+                <div className="font-semibold">{t.name}</div>
                 {t.destination && (
-                  <div style={{ color: "#444", fontSize: "0.9rem" }}>{t.destination}</div>
+                  <div className="text-sm text-slate-600">{t.destination}</div>
                 )}
                 {(t.startDate || t.endDate) && (
-                  <div style={{ color: "#666", fontSize: "0.85rem" }}>
+                  <div className="mt-0.5 text-xs text-slate-500">
                     {t.startDate ?? "?"} → {t.endDate ?? "?"}
                   </div>
                 )}
@@ -83,46 +76,34 @@ export default async function TripsPage() {
         </ul>
       )}
 
-      <h2 style={{ fontSize: "1.25rem", marginTop: "2rem" }}>Nuevo viaje</h2>
-      <form
-        action={createTrip}
-        style={{ display: "grid", gap: "0.5rem", maxWidth: 420 }}
-      >
-        <label>
-          Nombre
+      <h2 className="mt-12 text-lg font-semibold">Nuevo viaje</h2>
+      <form action={createTrip} className="mt-3 grid max-w-md gap-3">
+        <Field label="Nombre">
           <input
             name="name"
             required
             placeholder="Bariloche octubre"
-            style={inputStyle}
+            className={inputCls}
           />
-        </label>
-        <label>
-          Destino
-          <input name="destination" placeholder="Bariloche, AR" style={inputStyle} />
-        </label>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <label style={{ flex: 1 }}>
-            Desde
-            <input name="startDate" type="date" style={inputStyle} />
-          </label>
-          <label style={{ flex: 1 }}>
-            Hasta
-            <input name="endDate" type="date" style={inputStyle} />
-          </label>
+        </Field>
+        <Field label="Destino">
+          <input
+            name="destination"
+            placeholder="Bariloche, AR"
+            className={inputCls}
+          />
+        </Field>
+        <div className="flex gap-3">
+          <Field label="Desde" className="flex-1">
+            <input name="startDate" type="date" className={inputCls} />
+          </Field>
+          <Field label="Hasta" className="flex-1">
+            <input name="endDate" type="date" className={inputCls} />
+          </Field>
         </div>
         <button
           type="submit"
-          style={{
-            marginTop: "0.5rem",
-            padding: "0.6rem 1rem",
-            background: "#111",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: "1rem",
-          }}
+          className="mt-1 rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white shadow-sm transition hover:bg-slate-800"
         >
           Guardar viaje
         </button>
@@ -135,12 +116,22 @@ async function loadTrips() {
   return getDb().select().from(trips).orderBy(desc(trips.createdAt));
 }
 
-const inputStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  padding: "0.5rem 0.6rem",
-  marginTop: "0.25rem",
-  border: "1px solid #ccc",
-  borderRadius: 6,
-  fontSize: "1rem",
-};
+function Field({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`block text-sm ${className ?? ""}`}>
+      <span className="mb-1 block text-slate-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputCls =
+  "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10";

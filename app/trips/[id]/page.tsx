@@ -16,6 +16,15 @@ const KIND_LABELS: Record<(typeof ITEM_KINDS)[number], string> = {
   otro: "Otro",
 };
 
+const KIND_BADGE: Record<(typeof ITEM_KINDS)[number], string> = {
+  vuelo: "bg-sky-100 text-sky-800",
+  hotel: "bg-violet-100 text-violet-800",
+  auto: "bg-amber-100 text-amber-800",
+  excursion: "bg-emerald-100 text-emerald-800",
+  restaurante: "bg-rose-100 text-rose-800",
+  otro: "bg-slate-100 text-slate-700",
+};
+
 async function createItem(tripId: number, formData: FormData) {
   "use server";
   const name = String(formData.get("name") ?? "").trim();
@@ -64,143 +73,124 @@ export default async function TripDetailPage({
   const createItemBound = createItem.bind(null, tripId);
 
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        padding: "3rem 1.5rem",
-        maxWidth: "720px",
-        margin: "0 auto",
-        lineHeight: 1.6,
-      }}
-    >
-      <Link href="/trips" style={{ color: "#666", fontSize: "0.9rem", textDecoration: "none" }}>
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <Link href="/trips" className="text-sm text-slate-500 hover:text-slate-700">
         ← Todos los viajes
       </Link>
 
-      <h1 style={{ fontSize: "2rem", marginTop: "0.5rem", marginBottom: "0.25rem" }}>
-        {trip.name}
-      </h1>
-      {trip.destination && (
-        <div style={{ color: "#444" }}>{trip.destination}</div>
-      )}
-      {(trip.startDate || trip.endDate) && (
-        <div style={{ color: "#666", fontSize: "0.9rem" }}>
-          {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
-        </div>
-      )}
+      <header className="mt-2">
+        <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
+        {trip.destination && (
+          <div className="mt-1 text-slate-700">{trip.destination}</div>
+        )}
+        {(trip.startDate || trip.endDate) && (
+          <div className="mt-1 text-sm text-slate-500">
+            {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
+          </div>
+        )}
+      </header>
 
-      <h2 style={{ fontSize: "1.25rem", marginTop: "2rem" }}>Items</h2>
+      <h2 className="mt-10 text-lg font-semibold">Items</h2>
       {tripItems.length === 0 ? (
-        <p style={{ color: "#666" }}>Todavía no hay items. Sumá el primero abajo.</p>
+        <p className="mt-3 text-slate-600">
+          Todavía no hay items. Sumá el primero abajo.
+        </p>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {tripItems.map((it) => (
-            <li
-              key={it.id}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: 8,
-                padding: "0.75rem 1rem",
-                marginBottom: "0.5rem",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
-                <span style={{ fontWeight: 600 }}>{it.name}</span>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    background: "#eee",
-                    color: "#333",
-                    padding: "0.1rem 0.5rem",
-                    borderRadius: 999,
-                    alignSelf: "center",
-                  }}
-                >
-                  {KIND_LABELS[it.kind as (typeof ITEM_KINDS)[number]] ?? it.kind}
-                </span>
-              </div>
-              {(it.startAt || it.endAt) && (
-                <div style={{ color: "#666", fontSize: "0.85rem" }}>
-                  {it.startAt ? new Date(it.startAt).toLocaleString("es-AR") : "?"}
-                  {it.endAt && ` → ${new Date(it.endAt).toLocaleString("es-AR")}`}
+        <ul className="mt-3 space-y-2">
+          {tripItems.map((it) => {
+            const kind = it.kind as (typeof ITEM_KINDS)[number];
+            return (
+              <li
+                key={it.id}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className="font-semibold">{it.name}</span>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      KIND_BADGE[kind] ?? KIND_BADGE.otro
+                    }`}
+                  >
+                    {KIND_LABELS[kind] ?? it.kind}
+                  </span>
                 </div>
-              )}
-              {it.cost && (
-                <div style={{ color: "#444", fontSize: "0.9rem" }}>$ {it.cost}</div>
-              )}
-              {it.link && (
-                <div style={{ fontSize: "0.85rem" }}>
-                  <a href={it.link} target="_blank" rel="noopener noreferrer">
-                    {it.link}
-                  </a>
-                </div>
-              )}
-              {it.notes && (
-                <div style={{ color: "#555", fontSize: "0.9rem", marginTop: "0.25rem" }}>
-                  {it.notes}
-                </div>
-              )}
-            </li>
-          ))}
+                {(it.startAt || it.endAt) && (
+                  <div className="mt-1 text-sm text-slate-500">
+                    {it.startAt ? new Date(it.startAt).toLocaleString("es-AR") : "?"}
+                    {it.endAt && ` → ${new Date(it.endAt).toLocaleString("es-AR")}`}
+                  </div>
+                )}
+                {it.cost && (
+                  <div className="mt-1 text-sm text-slate-700">$ {it.cost}</div>
+                )}
+                {it.link && (
+                  <div className="mt-1 text-sm">
+                    <a
+                      href={it.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sky-700 underline-offset-2 hover:underline"
+                    >
+                      {it.link}
+                    </a>
+                  </div>
+                )}
+                {it.notes && (
+                  <div className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                    {it.notes}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      <h2 style={{ fontSize: "1.25rem", marginTop: "2rem" }}>Nuevo item</h2>
-      <form action={createItemBound} style={{ display: "grid", gap: "0.5rem", maxWidth: 480 }}>
-        <label>
-          Tipo
-          <select name="kind" required defaultValue="vuelo" style={inputStyle}>
+      <h2 className="mt-12 text-lg font-semibold">Nuevo item</h2>
+      <form action={createItemBound} className="mt-3 grid max-w-lg gap-3">
+        <Field label="Tipo">
+          <select name="kind" required defaultValue="vuelo" className={inputCls}>
             {ITEM_KINDS.map((k) => (
               <option key={k} value={k}>
                 {KIND_LABELS[k]}
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          Nombre
-          <input name="name" required placeholder="AA1234 BUE→BRC" style={inputStyle} />
-        </label>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <label style={{ flex: 1 }}>
-            Desde
-            <input name="startAt" type="datetime-local" style={inputStyle} />
-          </label>
-          <label style={{ flex: 1 }}>
-            Hasta
-            <input name="endAt" type="datetime-local" style={inputStyle} />
-          </label>
+        </Field>
+        <Field label="Nombre">
+          <input
+            name="name"
+            required
+            placeholder="AA1234 BUE→BRC"
+            className={inputCls}
+          />
+        </Field>
+        <div className="flex gap-3">
+          <Field label="Desde" className="flex-1">
+            <input name="startAt" type="datetime-local" className={inputCls} />
+          </Field>
+          <Field label="Hasta" className="flex-1">
+            <input name="endAt" type="datetime-local" className={inputCls} />
+          </Field>
         </div>
-        <label>
-          Costo
+        <Field label="Costo">
           <input
             name="cost"
             type="number"
             step="0.01"
             placeholder="0.00"
-            style={inputStyle}
+            className={inputCls}
           />
-        </label>
-        <label>
-          Link (booking, mail, etc.)
-          <input name="link" type="url" placeholder="https://..." style={inputStyle} />
-        </label>
-        <label>
-          Notas
-          <textarea name="notes" rows={3} style={{ ...inputStyle, resize: "vertical" }} />
-        </label>
+        </Field>
+        <Field label="Link (booking, mail, etc.)">
+          <input name="link" type="url" placeholder="https://..." className={inputCls} />
+        </Field>
+        <Field label="Notas">
+          <textarea name="notes" rows={3} className={`${inputCls} resize-y`} />
+        </Field>
         <button
           type="submit"
-          style={{
-            marginTop: "0.5rem",
-            padding: "0.6rem 1rem",
-            background: "#111",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: "1rem",
-          }}
+          className="mt-1 rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white shadow-sm transition hover:bg-slate-800"
         >
           Guardar item
         </button>
@@ -209,13 +199,22 @@ export default async function TripDetailPage({
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  padding: "0.5rem 0.6rem",
-  marginTop: "0.25rem",
-  border: "1px solid #ccc",
-  borderRadius: 6,
-  fontSize: "1rem",
-  fontFamily: "inherit",
-};
+function Field({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`block text-sm ${className ?? ""}`}>
+      <span className="mb-1 block text-slate-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputCls =
+  "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10";
