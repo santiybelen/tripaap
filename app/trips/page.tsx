@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { desc } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { trips } from "../../drizzle/schema";
+import { Field, inputCls, submitBtnCls } from "../_components/form-bits";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +38,9 @@ export default async function TripsPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-center justify-between">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-700">
-          ← Inicio
-        </Link>
-      </div>
+      <Link href="/" className="text-sm text-slate-500 hover:text-slate-700">
+        ← Inicio
+      </Link>
 
       <h1 className="mt-2 text-3xl font-bold tracking-tight">Mis viajes</h1>
 
@@ -101,10 +100,7 @@ export default async function TripsPage() {
             <input name="endDate" type="date" className={inputCls} />
           </Field>
         </div>
-        <button
-          type="submit"
-          className="mt-1 rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white shadow-sm transition hover:bg-slate-800"
-        >
+        <button type="submit" className={submitBtnCls}>
           Guardar viaje
         </button>
       </form>
@@ -115,23 +111,3 @@ export default async function TripsPage() {
 async function loadTrips() {
   return getDb().select().from(trips).orderBy(desc(trips.createdAt));
 }
-
-function Field({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className={`block text-sm ${className ?? ""}`}>
-      <span className="mb-1 block text-slate-700">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputCls =
-  "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10";

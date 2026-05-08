@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "../../../lib/db";
 import { trips, items, ITEM_KINDS } from "../../../drizzle/schema";
+import { Field, inputCls, submitBtnCls } from "../../_components/form-bits";
+import { ConfirmButton } from "../../_components/ConfirmButton";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,18 @@ async function createItem(tripId: number, formData: FormData) {
   revalidatePath(`/trips/${tripId}`);
 }
 
+async function deleteItem(itemId: number, tripId: number) {
+  "use server";
+  await getDb().delete(items).where(eq(items.id, itemId));
+  revalidatePath(`/trips/${tripId}`);
+}
+
+async function deleteTrip(tripId: number) {
+  "use server";
+  await getDb().delete(trips).where(eq(trips.id, tripId));
+  redirect("/trips");
+}
+
 export default async function TripDetailPage({
   params,
 }: {
@@ -71,6 +85,7 @@ export default async function TripDetailPage({
     .orderBy(asc(items.startAt), asc(items.createdAt));
 
   const createItemBound = createItem.bind(null, tripId);
+  const deleteTripBound = deleteTrip.bind(null, tripId);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
@@ -78,16 +93,33 @@ export default async function TripDetailPage({
         ← Todos los viajes
       </Link>
 
-      <header className="mt-2">
-        <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
-        {trip.destination && (
-          <div className="mt-1 text-slate-700">{trip.destination}</div>
-        )}
-        {(trip.startDate || trip.endDate) && (
-          <div className="mt-1 text-sm text-slate-500">
-            {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
-          </div>
-        )}
+      <header className="mt-2 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
+          {trip.destination && (
+            <div className="mt-1 text-slate-700">{trip.destination}</div>
+          )}
+          {(trip.startDate || trip.endDate) && (
+            <div className="mt-1 text-sm text-slate-500">
+              {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Link
+            href={`/trips/${tripId}/edit`}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Editar
+          </Link>
+          <ConfirmButton
+            action={deleteTripBound}
+            message={`¿Borrar el viaje "${trip.name}" y todos sus items? No se puede deshacer.`}
+            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50"
+          >
+            Borrar
+          </ConfirmButton>
+        </div>
       </header>
 
       <h2 className="mt-10 text-lg font-semibold">Items</h2>
@@ -99,6 +131,7 @@ export default async function TripDetailPage({
         <ul className="mt-3 space-y-2">
           {tripItems.map((it) => {
             const kind = it.kind as (typeof ITEM_KINDS)[number];
+            const deleteItemBound = deleteItem.bind(null, it.id, tripId);
             return (
               <li
                 key={it.id}
@@ -140,6 +173,22 @@ export default async function TripDetailPage({
                     {it.notes}
                   </div>
                 )}
+                <div className="mt-3 flex gap-2 text-sm">
+                  <Link
+                    href={`/trips/${tripId}/items/${it.id}/edit`}
+                    className="font-medium text-slate-700 hover:text-slate-900"
+                  >
+                    Editar
+                  </Link>
+                  <span className="text-slate-300">·</span>
+                  <ConfirmButton
+                    action={deleteItemBound}
+                    message={`¿Borrar "${it.name}"?`}
+                    className="font-medium text-red-700 hover:text-red-900"
+                  >
+                    Borrar
+                  </ConfirmButton>
+                </div>
               </li>
             );
           })}
@@ -188,33 +237,10 @@ export default async function TripDetailPage({
         <Field label="Notas">
           <textarea name="notes" rows={3} className={`${inputCls} resize-y`} />
         </Field>
-        <button
-          type="submit"
-          className="mt-1 rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white shadow-sm transition hover:bg-slate-800"
-        >
+        <button type="submit" className={submitBtnCls}>
           Guardar item
         </button>
       </form>
     </main>
   );
 }
-
-function Field({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className={`block text-sm ${className ?? ""}`}>
-      <span className="mb-1 block text-slate-700">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputCls =
-  "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10";
