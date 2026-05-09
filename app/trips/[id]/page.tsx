@@ -19,6 +19,8 @@ import {
 } from "../../../lib/item-kinds";
 import { TRANSPORT_LABELS, TRANSPORT_ICON } from "../../../lib/transport-modes";
 import { fetchDestinationPhoto } from "../../../lib/destination-photo";
+import { parseSlug, buildSlug } from "../../../lib/trip-slug";
+import { getTraveler, setTraveler } from "../../../lib/traveler";
 
 export const dynamic = "force-dynamic";
 
@@ -150,8 +152,18 @@ function groupByDay(rows: ItemRow[]) {
     .map(([key, g]) => ({ key, ...g }));
 }
 
-async function createDestination(tripId: number, formData: FormData) {
+async function joinTrip(slug: string, formData: FormData) {
   "use server";
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  await setTraveler(name);
+  revalidatePath(`/trips/${slug}`);
+}
+
+async function createDestination(slug: string, formData: FormData) {
+  "use server";
+  const parsed = parseSlug(slug);
+  if (!parsed) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
@@ -164,36 +176,38 @@ async function createDestination(tripId: number, formData: FormData) {
   const last = await db
     .select({ orderIndex: tripDestinations.orderIndex })
     .from(tripDestinations)
-    .where(eq(tripDestinations.tripId, tripId))
+    .where(eq(tripDestinations.tripId, parsed.id))
     .orderBy(desc(tripDestinations.orderIndex))
     .limit(1);
   const orderIndex = (last[0]?.orderIndex ?? -1) + 1;
 
   const coverImageUrl = await fetchDestinationPhoto(name);
+  const traveler = await getTraveler();
 
   await db.insert(tripDestinations).values({
-    tripId,
+    tripId: parsed.id,
     name,
     orderIndex,
     coverImageUrl,
     arrivalMode,
     arrivalDate,
     departureDate,
+    createdByName: traveler.name,
   });
 
-  revalidatePath(`/trips/${tripId}`);
+  revalidatePath(`/trips/${slug}`);
 }
 
-async function deleteDestination(tripId: number, destId: number) {
+async function deleteDestination(slug: string, destId: number) {
   "use server";
   await getDb()
     .delete(tripDestinations)
     .where(eq(tripDestinations.id, destId));
-  revalidatePath(`/trips/${tripId}`);
+  revalidatePath(`/trips/${slug}`);
 }
 
 async function createItem(
-  tripId: number,
+  slug: string,
   destinationId: number,
   formData: FormData
 ) {
@@ -207,6 +221,7 @@ async function createItem(
   const costRaw = String(formData.get("cost") ?? "").trim();
   const link = String(formData.get("link") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const traveler = await getTraveler();
 
   await getDb().insert(items).values({
     destinationId,
@@ -217,15 +232,16 @@ async function createItem(
     cost: costRaw || null,
     link,
     notes,
+    createdByName: traveler.name,
   });
 
-  revalidatePath(`/trips/${tripId}`);
+  revalidatePath(`/trips/${slug}`);
 }
 
-async function deleteItem(tripId: number, itemId: number) {
+async function deleteItem(slug: string, itemId: number) {
   "use server";
   await getDb().delete(items).where(eq(items.id, itemId));
-  revalidatePath(`/trips/${tripId}`);
+  revalidatePath(`/trips/${slug}`);
 }
 
 async function deleteTrip(tripId: number) {
@@ -241,27 +257,33 @@ export default async function TripDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ view?: string }>;
 }) {
-  const { id } = await params;
+  const { id: slug } = await params;
   const { view } = await searchParams;
   const activeTab: "all" | (typeof TAB_KINDS)[number] =
     view && (TAB_KINDS as readonly string[]).includes(view)
       ? (view as (typeof TAB_KINDS)[number])
       : "all";
-  const tripId = Number(id);
-  if (!Number.isFinite(tripId)) notFound();
+
+  const parsed = parseSlug(slug);
+  if (!parsed) notFound();
 
   const db = getDb();
   const [trip] = await db
     .select()
     .from(trips)
-    .where(eq(trips.id, tripId))
+    .where(eq(trips.id, parsed.id))
     .limit(1);
-  if (!trip) notFound();
+  if (!trip || trip.shareToken !== parsed.token) notFound();
+
+  const traveler = await getTraveler();
+  if (!traveler.name) {
+    return <JoinPrompt tripName={trip.name} slug={slug} />;
+  }
 
   const dests = await db
     .select()
     .from(tripDestinations)
-    .where(eq(tripDestinations.tripId, tripId))
+    .where(eq(tripDestinations.tripId, parsed.id))
     .orderBy(asc(tripDestinations.orderIndex));
 
   const allItems: ItemRow[] =
@@ -278,14 +300,20 @@ export default async function TripDetailPage({
           .orderBy(asc(items.startAt), asc(items.createdAt))
       : [];
 
-  const deleteTripBound = deleteTrip.bind(null, tripId);
-  const createDestinationBound = createDestination.bind(null, tripId);
+  const deleteTripBound = deleteTrip.bind(null, parsed.id);
+  const createDestinationBound = createDestination.bind(null, slug);
+  const tripUrl = `/trips/${slug}`;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <Link href="/trips" className="text-sm text-slate-500 hover:text-slate-700">
-        ← Mis viajes
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link href="/trips" className="text-sm text-slate-500 hover:text-slate-700">
+          ← Mis viajes
+        </Link>
+        <span className="text-xs text-slate-500">
+          Hola, <strong className="text-slate-700">{traveler.name}</strong>
+        </span>
+      </div>
 
       <header className="mt-2 flex items-start justify-between gap-4">
         <div>
@@ -303,7 +331,7 @@ export default async function TripDetailPage({
         </div>
         <div className="flex shrink-0 gap-2">
           <Link
-            href={`/trips/${tripId}/edit`}
+            href={`${tripUrl}/edit`}
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
             Editar
@@ -326,7 +354,7 @@ export default async function TripDetailPage({
                 📍 {trip.originName}
               </span>
             )}
-            {dests.map((d, idx) => (
+            {dests.map((d) => (
               <span key={d.id} className="flex items-center gap-2">
                 <span className="text-lg">
                   {TRANSPORT_ICON[
@@ -363,8 +391,8 @@ export default async function TripDetailPage({
               activeTab === "all"
                 ? destItems
                 : destItems.filter((it) => it.kind === activeTab);
-            const deleteDestBound = deleteDestination.bind(null, tripId, dest.id);
-            const createItemBound = createItem.bind(null, tripId, dest.id);
+            const deleteDestBound = deleteDestination.bind(null, slug, dest.id);
+            const createItemBound = createItem.bind(null, slug, dest.id);
 
             return (
               <section
@@ -382,7 +410,7 @@ export default async function TripDetailPage({
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                     <div className="absolute right-3 top-3 flex gap-2">
                       <Link
-                        href={`/trips/${tripId}/destinations/${dest.id}/edit`}
+                        href={`${tripUrl}/destinations/${dest.id}/edit`}
                         className="rounded-lg bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-700 backdrop-blur transition hover:bg-white"
                       >
                         Editar
@@ -405,6 +433,11 @@ export default async function TripDetailPage({
                           {dest.departureDate ?? "?"}
                         </div>
                       )}
+                      {dest.createdByName && (
+                        <div className="mt-1 text-xs text-white/80 drop-shadow">
+                          Sumado por {dest.createdByName}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -419,10 +452,15 @@ export default async function TripDetailPage({
                           {dest.departureDate ?? "?"}
                         </div>
                       )}
+                      {dest.createdByName && (
+                        <div className="mt-1 text-xs text-slate-500">
+                          Sumado por {dest.createdByName}
+                        </div>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Link
-                        href={`/trips/${tripId}/destinations/${dest.id}/edit`}
+                        href={`${tripUrl}/destinations/${dest.id}/edit`}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                       >
                         Editar
@@ -483,7 +521,7 @@ export default async function TripDetailPage({
                 <div className="-mx-6 mt-2 overflow-x-auto px-6">
                   <div className="flex min-w-max gap-1.5 pb-1">
                     <Link
-                      href={`/trips/${tripId}#dest-${dest.id}`}
+                      href={`${tripUrl}#dest-${dest.id}`}
                       scroll={false}
                       className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
                         activeTab === "all"
@@ -496,7 +534,7 @@ export default async function TripDetailPage({
                     {TAB_KINDS.map((k) => (
                       <Link
                         key={k}
-                        href={`/trips/${tripId}?view=${k}#dest-${dest.id}`}
+                        href={`${tripUrl}?view=${k}#dest-${dest.id}`}
                         scroll={false}
                         className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
                           activeTab === k
@@ -535,7 +573,7 @@ export default async function TripDetailPage({
                             const kind = it.kind as (typeof ITEM_KINDS)[number];
                             const deleteItemBound = deleteItem.bind(
                               null,
-                              tripId,
+                              slug,
                               it.id
                             );
                             const timeLabel = formatItemTime(
@@ -591,9 +629,14 @@ export default async function TripDetailPage({
                                     {it.notes}
                                   </div>
                                 )}
+                                {it.createdByName && (
+                                  <div className="mt-2 text-xs text-slate-500">
+                                    Cargado por {it.createdByName}
+                                  </div>
+                                )}
                                 <div className="mt-3 flex gap-2 text-sm">
                                   <Link
-                                    href={`/trips/${tripId}/items/${it.id}/edit`}
+                                    href={`${tripUrl}/items/${it.id}/edit`}
                                     className="font-medium text-slate-700 hover:text-slate-900"
                                   >
                                     Editar
@@ -743,6 +786,50 @@ export default async function TripDetailPage({
           </button>
         </form>
       </section>
+
+      <section className="mt-10 rounded-xl border border-slate-200 bg-white/70 p-5">
+        <h3 className="text-sm font-semibold text-slate-700">
+          Compartir este viaje
+        </h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Pasale este link a los que viajan con vos. Cuando entren se les pide
+          el nombre y pueden cargar/editar todo.
+        </p>
+        <code className="mt-2 block break-all rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
+          {/* On the server we don't know the host. Show the relative path; the
+              user copies the full URL from the address bar. */}
+          {tripUrl}
+        </code>
+      </section>
+    </main>
+  );
+}
+
+function JoinPrompt({ tripName, slug }: { tripName: string; slug: string }) {
+  const joinBound = joinTrip.bind(null, slug);
+  return (
+    <main className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-6 py-12">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm text-slate-500">Te invitaron a un viaje</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">{tripName}</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          Decinos cómo te llamás para que el grupo sepa qué cargás vos.
+        </p>
+        <form action={joinBound} className="mt-5 grid gap-3">
+          <Field label="Tu nombre">
+            <input
+              name="name"
+              required
+              autoFocus
+              placeholder="Belén"
+              className={inputCls}
+            />
+          </Field>
+          <button type="submit" className={submitBtnCls}>
+            Entrar al viaje
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

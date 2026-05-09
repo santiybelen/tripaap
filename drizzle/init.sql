@@ -2,12 +2,13 @@
 -- Each block matches the corresponding pgTable in drizzle/schema.ts.
 
 CREATE TABLE IF NOT EXISTS trips (
-  id          SERIAL PRIMARY KEY,
-  name        TEXT NOT NULL,
-  origin_name TEXT,
-  start_date  DATE,
-  end_date    DATE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id           SERIAL PRIMARY KEY,
+  name         TEXT NOT NULL,
+  origin_name  TEXT,
+  start_date   DATE,
+  end_date     DATE,
+  share_token  TEXT NOT NULL DEFAULT substring(md5(random()::text), 1, 12),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS trip_destinations (
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS trip_destinations (
   arrival_mode    TEXT NOT NULL DEFAULT 'avion',
   arrival_date    DATE,
   departure_date  DATE,
+  created_by_name TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -34,6 +36,7 @@ CREATE TABLE IF NOT EXISTS items (
   cost           NUMERIC(12,2),
   link           TEXT,
   notes          TEXT,
+  created_by_name TEXT,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

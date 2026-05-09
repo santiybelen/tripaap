@@ -5,11 +5,15 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
 import { trips } from "../../../../drizzle/schema";
 import { Field, inputCls, submitBtnCls } from "../../../_components/form-bits";
+import { parseSlug } from "../../../../lib/trip-slug";
 
 export const dynamic = "force-dynamic";
 
-async function updateTrip(tripId: number, formData: FormData) {
+async function updateTrip(slug: string, formData: FormData) {
   "use server";
+  const parsed = parseSlug(slug);
+  if (!parsed) return;
+
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
@@ -20,10 +24,10 @@ async function updateTrip(tripId: number, formData: FormData) {
   await getDb()
     .update(trips)
     .set({ name, originName, startDate, endDate })
-    .where(eq(trips.id, tripId));
+    .where(eq(trips.id, parsed.id));
 
-  revalidatePath(`/trips/${tripId}`);
-  redirect(`/trips/${tripId}`);
+  revalidatePath(`/trips/${slug}`);
+  redirect(`/trips/${slug}`);
 }
 
 export default async function EditTripPage({
@@ -31,23 +35,23 @@ export default async function EditTripPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-  const tripId = Number(id);
-  if (!Number.isFinite(tripId)) notFound();
+  const { id: slug } = await params;
+  const parsed = parseSlug(slug);
+  if (!parsed) notFound();
 
   const [trip] = await getDb()
     .select()
     .from(trips)
-    .where(eq(trips.id, tripId))
+    .where(eq(trips.id, parsed.id))
     .limit(1);
-  if (!trip) notFound();
+  if (!trip || trip.shareToken !== parsed.token) notFound();
 
-  const updateTripBound = updateTrip.bind(null, tripId);
+  const updateTripBound = updateTrip.bind(null, slug);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <Link
-        href={`/trips/${tripId}`}
+        href={`/trips/${slug}`}
         className="text-sm text-slate-500 hover:text-slate-700"
       >
         ← Volver al viaje

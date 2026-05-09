@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../../../lib/db";
 import {
+  trips,
   items,
   tripDestinations,
   ITEM_KINDS,
@@ -18,15 +19,19 @@ import {
   KIND_LABELS,
   KIND_ICON,
 } from "../../../../../../lib/item-kinds";
+import { parseSlug } from "../../../../../../lib/trip-slug";
 
 export const dynamic = "force-dynamic";
 
 async function updateItem(
+  slug: string,
   itemId: number,
-  tripId: number,
   formData: FormData
 ) {
   "use server";
+  const parsed = parseSlug(slug);
+  if (!parsed) return;
+
   const name = String(formData.get("name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "").trim();
   if (!name || !ITEM_KINDS.includes(kind as (typeof ITEM_KINDS)[number])) return;
@@ -50,8 +55,8 @@ async function updateItem(
     })
     .where(eq(items.id, itemId));
 
-  revalidatePath(`/trips/${tripId}`);
-  redirect(`/trips/${tripId}`);
+  revalidatePath(`/trips/${slug}`);
+  redirect(`/trips/${slug}`);
 }
 
 export default async function EditItemPage({
@@ -59,12 +64,19 @@ export default async function EditItemPage({
 }: {
   params: Promise<{ id: string; itemId: string }>;
 }) {
-  const { id, itemId } = await params;
-  const tripId = Number(id);
+  const { id: slug, itemId } = await params;
+  const parsed = parseSlug(slug);
   const itemIdNum = Number(itemId);
-  if (!Number.isFinite(tripId) || !Number.isFinite(itemIdNum)) notFound();
+  if (!parsed || !Number.isFinite(itemIdNum)) notFound();
 
   const db = getDb();
+  const [trip] = await db
+    .select()
+    .from(trips)
+    .where(eq(trips.id, parsed.id))
+    .limit(1);
+  if (!trip || trip.shareToken !== parsed.token) notFound();
+
   const [item] = await db
     .select()
     .from(items)
@@ -77,14 +89,14 @@ export default async function EditItemPage({
     .from(tripDestinations)
     .where(eq(tripDestinations.id, item.destinationId))
     .limit(1);
-  if (!dest || dest.tripId !== tripId) notFound();
+  if (!dest || dest.tripId !== parsed.id) notFound();
 
-  const updateItemBound = updateItem.bind(null, itemIdNum, tripId);
+  const updateItemBound = updateItem.bind(null, slug, itemIdNum);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <Link
-        href={`/trips/${tripId}`}
+        href={`/trips/${slug}`}
         className="text-sm text-slate-500 hover:text-slate-700"
       >
         ← Volver al viaje

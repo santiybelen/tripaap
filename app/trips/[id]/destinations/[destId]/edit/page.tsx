@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../../../lib/db";
 import {
+  trips,
   tripDestinations,
   TRANSPORT_MODES,
 } from "../../../../../../drizzle/schema";
@@ -17,15 +18,19 @@ import {
   TRANSPORT_ICON,
 } from "../../../../../../lib/transport-modes";
 import { fetchDestinationPhoto } from "../../../../../../lib/destination-photo";
+import { parseSlug } from "../../../../../../lib/trip-slug";
 
 export const dynamic = "force-dynamic";
 
 async function updateDestination(
-  tripId: number,
+  slug: string,
   destId: number,
   formData: FormData
 ) {
   "use server";
+  const parsed = parseSlug(slug);
+  if (!parsed) return;
+
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
@@ -47,8 +52,8 @@ async function updateDestination(
     })
     .where(eq(tripDestinations.id, destId));
 
-  revalidatePath(`/trips/${tripId}`);
-  redirect(`/trips/${tripId}`);
+  revalidatePath(`/trips/${slug}`);
+  redirect(`/trips/${slug}`);
 }
 
 export default async function EditDestinationPage({
@@ -56,29 +61,37 @@ export default async function EditDestinationPage({
 }: {
   params: Promise<{ id: string; destId: string }>;
 }) {
-  const { id, destId } = await params;
-  const tripId = Number(id);
+  const { id: slug, destId } = await params;
+  const parsed = parseSlug(slug);
   const destIdNum = Number(destId);
-  if (!Number.isFinite(tripId) || !Number.isFinite(destIdNum)) notFound();
+  if (!parsed || !Number.isFinite(destIdNum)) notFound();
 
-  const [dest] = await getDb()
+  const db = getDb();
+  const [trip] = await db
+    .select()
+    .from(trips)
+    .where(eq(trips.id, parsed.id))
+    .limit(1);
+  if (!trip || trip.shareToken !== parsed.token) notFound();
+
+  const [dest] = await db
     .select()
     .from(tripDestinations)
     .where(
       and(
         eq(tripDestinations.id, destIdNum),
-        eq(tripDestinations.tripId, tripId)
+        eq(tripDestinations.tripId, parsed.id)
       )
     )
     .limit(1);
   if (!dest) notFound();
 
-  const updateDestBound = updateDestination.bind(null, tripId, destIdNum);
+  const updateDestBound = updateDestination.bind(null, slug, destIdNum);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <Link
-        href={`/trips/${tripId}`}
+        href={`/trips/${slug}`}
         className="text-sm text-slate-500 hover:text-slate-700"
       >
         ← Volver al viaje

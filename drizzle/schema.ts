@@ -15,6 +15,7 @@ export const trips = pgTable("trips", {
   originName: text("origin_name"),
   startDate: date("start_date"),
   endDate: date("end_date"),
+  shareToken: text("share_token").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -43,6 +44,7 @@ export const tripDestinations = pgTable(
     arrivalMode: text("arrival_mode").notNull().default("avion"),
     arrivalDate: date("arrival_date"),
     departureDate: date("departure_date"),
+    createdByName: text("created_by_name"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -78,6 +80,7 @@ export const items = pgTable(
     cost: numeric("cost", { precision: 12, scale: 2 }),
     link: text("link"),
     notes: text("notes"),
+    createdByName: text("created_by_name"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
