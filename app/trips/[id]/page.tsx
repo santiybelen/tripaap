@@ -31,21 +31,26 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function formatItemTime(startAt: Date | null, endAt: Date | null) {
+function formatItemTime(
+  startAt: Date | null,
+  endAt: Date | null,
+  full = false
+) {
   if (!startAt && !endAt) return null;
   const time = (d: Date) =>
     d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const dateTime = (d: Date) => d.toLocaleString("es-AR");
+  const fmt = full ? dateTime : time;
 
   if (!startAt) return dateTime(new Date(endAt!));
   const start = new Date(startAt);
-  if (!endAt) return time(start);
+  if (!endAt) return fmt(start);
 
   const end = new Date(endAt);
   const sameDay = start.toDateString() === end.toDateString();
   return sameDay
-    ? `${time(start)} → ${time(end)}`
-    : `${time(start)} → ${dateTime(end)}`;
+    ? `${fmt(start)} → ${time(end)}`
+    : `${fmt(start)} → ${dateTime(end)}`;
 }
 
 type ItemRow = {
@@ -89,6 +94,14 @@ function groupByDay(rows: ItemRow[]) {
     .map(([key, g]) => ({ key, ...g }));
 }
 
+function groupByKind(rows: ItemRow[]) {
+  return ITEM_KINDS.map((kind) => ({
+    key: kind,
+    label: KIND_LABELS[kind],
+    rows: rows.filter((it) => it.kind === kind),
+  })).filter((g) => g.rows.length > 0);
+}
+
 async function createItem(tripId: number, formData: FormData) {
   "use server";
   const name = String(formData.get("name") ?? "").trim();
@@ -129,10 +142,14 @@ async function deleteTrip(tripId: number) {
 
 export default async function TripDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { id } = await params;
+  const { view } = await searchParams;
+  const groupedByKind = view === "kind";
   const tripId = Number(id);
   if (!Number.isFinite(tripId)) notFound();
 
@@ -225,14 +242,43 @@ export default async function TripDetailPage({
         </section>
       )}
 
-      <h2 className="mt-10 text-lg font-semibold">Items</h2>
+      <div className="mt-10 flex items-center justify-between gap-4">
+        <h2 className="text-lg font-semibold">Items</h2>
+        {tripItems.length > 0 && (
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+            <Link
+              href={`/trips/${tripId}`}
+              className={`rounded-md px-3 py-1 font-medium transition ${
+                groupedByKind
+                  ? "text-slate-600 hover:text-slate-900"
+                  : "bg-slate-900 text-white"
+              }`}
+            >
+              Por día
+            </Link>
+            <Link
+              href={`/trips/${tripId}?view=kind`}
+              className={`rounded-md px-3 py-1 font-medium transition ${
+                groupedByKind
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Por tipo
+            </Link>
+          </div>
+        )}
+      </div>
       {tripItems.length === 0 ? (
         <p className="mt-3 text-slate-600">
           Todavía no hay items. Sumá el primero abajo.
         </p>
       ) : (
         <div className="mt-4 space-y-6">
-          {groupByDay(tripItems).map(({ key, label, rows }) => (
+          {(groupedByKind
+            ? groupByKind(tripItems)
+            : groupByDay(tripItems)
+          ).map(({ key, label, rows }) => (
             <section key={key}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {label}
@@ -241,7 +287,11 @@ export default async function TripDetailPage({
                 {rows.map((it) => {
                   const kind = it.kind as (typeof ITEM_KINDS)[number];
                   const deleteItemBound = deleteItem.bind(null, it.id, tripId);
-                  const timeLabel = formatItemTime(it.startAt, it.endAt);
+                  const timeLabel = formatItemTime(
+                    it.startAt,
+                    it.endAt,
+                    groupedByKind
+                  );
                   return (
                     <li
                       key={it.id}
