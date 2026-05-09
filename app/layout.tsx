@@ -12,7 +12,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="min-h-screen bg-gradient-to-b from-slate-50 to-sky-50 text-slate-900 antialiased">
+      <body className="min-h-screen bg-gradient-to-br from-sky-100 via-violet-100 to-rose-100 text-slate-900 antialiased">
         {children}
       </body>
     </html>
