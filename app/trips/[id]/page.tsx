@@ -28,6 +28,42 @@ const KIND_BORDER: Record<(typeof ITEM_KINDS)[number], string> = {
   otro: "border-l-slate-400",
 };
 
+const RESOURCES: {
+  name: string;
+  icon: string;
+  description: string;
+  urlFor: (dest: string) => string;
+}[] = [
+  {
+    name: "Time Out",
+    icon: "🎟️",
+    description: "Restaurantes, bares y eventos",
+    urlFor: (d) =>
+      `https://www.timeout.com/search?query=${encodeURIComponent(d)}`,
+  },
+  {
+    name: "Wikivoyage",
+    icon: "📖",
+    description: "Guía: ver, comer, dormir",
+    urlFor: (d) =>
+      `https://es.wikivoyage.org/w/index.php?search=${encodeURIComponent(d)}`,
+  },
+  {
+    name: "Google Maps",
+    icon: "🗺️",
+    description: "Mapa, lugares cerca, reviews",
+    urlFor: (d) =>
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d)}`,
+  },
+  {
+    name: "Tripadvisor",
+    icon: "⭐",
+    description: "Atracciones rankeadas",
+    urlFor: (d) =>
+      `https://www.tripadvisor.es/Search?q=${encodeURIComponent(d)}`,
+  },
+];
+
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -277,6 +313,34 @@ export default async function TripDetailPage({
                   $ {fmt(costByKind[k])}
                 </span>
               </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {trip.destination && (
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold">
+            Recursos para {trip.destination}
+          </h2>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {RESOURCES.map((r) => (
+              <a
+                key={r.name}
+                href={r.urlFor(trip.destination!)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-400 hover:shadow-sm"
+              >
+                <span className="text-2xl">{r.icon}</span>
+                <div className="flex-1">
+                  <div className="font-semibold">{r.name}</div>
+                  <div className="text-xs text-slate-500">{r.description}</div>
+                </div>
+                <span className="text-slate-400" aria-hidden>
+                  ↗
+                </span>
+              </a>
             ))}
           </div>
         </section>
