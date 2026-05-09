@@ -27,6 +27,68 @@ const KIND_BADGE: Record<(typeof ITEM_KINDS)[number], string> = {
   otro: "bg-slate-100 text-slate-700",
 };
 
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatItemTime(startAt: Date | null, endAt: Date | null) {
+  if (!startAt && !endAt) return null;
+  const time = (d: Date) =>
+    d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  const dateTime = (d: Date) => d.toLocaleString("es-AR");
+
+  if (!startAt) return dateTime(new Date(endAt!));
+  const start = new Date(startAt);
+  if (!endAt) return time(start);
+
+  const end = new Date(endAt);
+  const sameDay = start.toDateString() === end.toDateString();
+  return sameDay
+    ? `${time(start)} → ${time(end)}`
+    : `${time(start)} → ${dateTime(end)}`;
+}
+
+type ItemRow = {
+  id: number;
+  tripId: number;
+  kind: string;
+  name: string;
+  startAt: Date | null;
+  endAt: Date | null;
+  cost: string | null;
+  link: string | null;
+  notes: string | null;
+  createdAt: Date;
+};
+
+function groupByDay(rows: ItemRow[]) {
+  const groups = new Map<string, { label: string; rows: ItemRow[] }>();
+  for (const it of rows) {
+    let key: string;
+    let label: string;
+    if (it.startAt) {
+      const d = new Date(it.startAt);
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      label = capitalize(
+        d.toLocaleDateString("es-AR", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        })
+      );
+    } else {
+      key = "zzz-no-date";
+      label = "Sin fecha";
+    }
+    const existing = groups.get(key);
+    if (existing) existing.rows.push(it);
+    else groups.set(key, { label, rows: [it] });
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, g]) => ({ key, ...g }));
+}
+
 async function createItem(tripId: number, formData: FormData) {
   "use server";
   const name = String(formData.get("name") ?? "").trim();
@@ -169,71 +231,80 @@ export default async function TripDetailPage({
           Todavía no hay items. Sumá el primero abajo.
         </p>
       ) : (
-        <ul className="mt-3 space-y-2">
-          {tripItems.map((it) => {
-            const kind = it.kind as (typeof ITEM_KINDS)[number];
-            const deleteItemBound = deleteItem.bind(null, it.id, tripId);
-            return (
-              <li
-                key={it.id}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className="font-semibold">{it.name}</span>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      KIND_BADGE[kind] ?? KIND_BADGE.otro
-                    }`}
-                  >
-                    {KIND_LABELS[kind] ?? it.kind}
-                  </span>
-                </div>
-                {(it.startAt || it.endAt) && (
-                  <div className="mt-1 text-sm text-slate-500">
-                    {it.startAt ? new Date(it.startAt).toLocaleString("es-AR") : "?"}
-                    {it.endAt && ` → ${new Date(it.endAt).toLocaleString("es-AR")}`}
-                  </div>
-                )}
-                {it.cost && (
-                  <div className="mt-1 text-sm text-slate-700">$ {it.cost}</div>
-                )}
-                {it.link && (
-                  <div className="mt-1 text-sm">
-                    <a
-                      href={it.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sky-700 underline-offset-2 hover:underline"
+        <div className="mt-4 space-y-6">
+          {groupByDay(tripItems).map(({ key, label, rows }) => (
+            <section key={key}>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {label}
+              </h3>
+              <ul className="space-y-2">
+                {rows.map((it) => {
+                  const kind = it.kind as (typeof ITEM_KINDS)[number];
+                  const deleteItemBound = deleteItem.bind(null, it.id, tripId);
+                  const timeLabel = formatItemTime(it.startAt, it.endAt);
+                  return (
+                    <li
+                      key={it.id}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-3"
                     >
-                      {it.link}
-                    </a>
-                  </div>
-                )}
-                {it.notes && (
-                  <div className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-                    {it.notes}
-                  </div>
-                )}
-                <div className="mt-3 flex gap-2 text-sm">
-                  <Link
-                    href={`/trips/${tripId}/items/${it.id}/edit`}
-                    className="font-medium text-slate-700 hover:text-slate-900"
-                  >
-                    Editar
-                  </Link>
-                  <span className="text-slate-300">·</span>
-                  <ConfirmButton
-                    action={deleteItemBound}
-                    message={`¿Borrar "${it.name}"?`}
-                    className="font-medium text-red-700 hover:text-red-900"
-                  >
-                    Borrar
-                  </ConfirmButton>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="font-semibold">{it.name}</span>
+                        <span
+                          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            KIND_BADGE[kind] ?? KIND_BADGE.otro
+                          }`}
+                        >
+                          {KIND_LABELS[kind] ?? it.kind}
+                        </span>
+                      </div>
+                      {timeLabel && (
+                        <div className="mt-1 text-sm text-slate-500 tabular-nums">
+                          {timeLabel}
+                        </div>
+                      )}
+                      {it.cost && (
+                        <div className="mt-1 text-sm text-slate-700">$ {it.cost}</div>
+                      )}
+                      {it.link && (
+                        <div className="mt-1 text-sm">
+                          <a
+                            href={it.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sky-700 underline-offset-2 hover:underline"
+                          >
+                            {it.link}
+                          </a>
+                        </div>
+                      )}
+                      {it.notes && (
+                        <div className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                          {it.notes}
+                        </div>
+                      )}
+                      <div className="mt-3 flex gap-2 text-sm">
+                        <Link
+                          href={`/trips/${tripId}/items/${it.id}/edit`}
+                          className="font-medium text-slate-700 hover:text-slate-900"
+                        >
+                          Editar
+                        </Link>
+                        <span className="text-slate-300">·</span>
+                        <ConfirmButton
+                          action={deleteItemBound}
+                          message={`¿Borrar "${it.name}"?`}
+                          className="font-medium text-red-700 hover:text-red-900"
+                        >
+                          Borrar
+                        </ConfirmButton>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
 
       <h2 className="mt-12 text-lg font-semibold">Nuevo item</h2>
