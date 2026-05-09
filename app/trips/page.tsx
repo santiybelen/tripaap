@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { desc } from "drizzle-orm";
 import { getDb } from "../../lib/db";
 import { trips } from "../../drizzle/schema";
 import { Field, inputCls, submitBtnCls } from "../_components/form-bits";
-import { fetchDestinationPhoto } from "../../lib/destination-photo";
 
 export const dynamic = "force-dynamic";
 
@@ -13,22 +13,17 @@ async function createTrip(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
-  const destination = String(formData.get("destination") ?? "").trim() || null;
+  const originName = String(formData.get("originName") ?? "").trim() || null;
   const startDate = String(formData.get("startDate") ?? "").trim() || null;
   const endDate = String(formData.get("endDate") ?? "").trim() || null;
-  const coverImageUrl = destination
-    ? await fetchDestinationPhoto(destination)
-    : null;
 
-  await getDb().insert(trips).values({
-    name,
-    destination,
-    startDate,
-    endDate,
-    coverImageUrl,
-  });
+  const [created] = await getDb()
+    .insert(trips)
+    .values({ name, originName, startDate, endDate })
+    .returning({ id: trips.id });
 
   revalidatePath("/trips");
+  redirect(`/trips/${created.id}`);
 }
 
 export default async function TripsPage() {
@@ -66,8 +61,10 @@ export default async function TripsPage() {
                 className="block rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-400 hover:shadow-sm"
               >
                 <div className="font-semibold">{t.name}</div>
-                {t.destination && (
-                  <div className="text-sm text-slate-600">{t.destination}</div>
+                {t.originName && (
+                  <div className="text-sm text-slate-600">
+                    📍 Desde {t.originName}
+                  </div>
                 )}
                 {(t.startDate || t.endDate) && (
                   <div className="mt-0.5 text-xs text-slate-500">
@@ -86,14 +83,14 @@ export default async function TripsPage() {
           <input
             name="name"
             required
-            placeholder="Bariloche octubre"
+            placeholder="Europa octubre"
             className={inputCls}
           />
         </Field>
-        <Field label="Destino">
+        <Field label="Salgo desde (origen)">
           <input
-            name="destination"
-            placeholder="Bariloche, AR"
+            name="originName"
+            placeholder="Buenos Aires"
             className={inputCls}
           />
         </Field>
@@ -106,7 +103,7 @@ export default async function TripsPage() {
           </Field>
         </div>
         <button type="submit" className={submitBtnCls}>
-          Guardar viaje
+          Crear viaje
         </button>
       </form>
     </main>

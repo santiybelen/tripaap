@@ -1,16 +1,23 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../../../../lib/db";
-import { items, ITEM_KINDS } from "../../../../../../drizzle/schema";
+import {
+  items,
+  tripDestinations,
+  ITEM_KINDS,
+} from "../../../../../../drizzle/schema";
 import {
   Field,
   inputCls,
   submitBtnCls,
   toLocalDatetime,
 } from "../../../../../_components/form-bits";
-import { KIND_LABELS, KIND_ICON } from "../../../../../../lib/item-kinds";
+import {
+  KIND_LABELS,
+  KIND_ICON,
+} from "../../../../../../lib/item-kinds";
 
 export const dynamic = "force-dynamic";
 
@@ -57,12 +64,20 @@ export default async function EditItemPage({
   const itemIdNum = Number(itemId);
   if (!Number.isFinite(tripId) || !Number.isFinite(itemIdNum)) notFound();
 
-  const [item] = await getDb()
+  const db = getDb();
+  const [item] = await db
     .select()
     .from(items)
-    .where(and(eq(items.id, itemIdNum), eq(items.tripId, tripId)))
+    .where(eq(items.id, itemIdNum))
     .limit(1);
   if (!item) notFound();
+
+  const [dest] = await db
+    .select()
+    .from(tripDestinations)
+    .where(eq(tripDestinations.id, item.destinationId))
+    .limit(1);
+  if (!dest || dest.tripId !== tripId) notFound();
 
   const updateItemBound = updateItem.bind(null, itemIdNum, tripId);
 
@@ -76,6 +91,9 @@ export default async function EditItemPage({
       </Link>
 
       <h1 className="mt-2 text-3xl font-bold tracking-tight">Editar item</h1>
+      <p className="mt-1 text-sm text-slate-600">
+        Item de <strong>{dest.name}</strong>
+      </p>
 
       <form action={updateItemBound} className="mt-6 grid max-w-lg gap-3">
         <Field label="Tipo">

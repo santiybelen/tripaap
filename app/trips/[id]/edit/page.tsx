@@ -5,7 +5,6 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
 import { trips } from "../../../../drizzle/schema";
 import { Field, inputCls, submitBtnCls } from "../../../_components/form-bits";
-import { fetchDestinationPhoto } from "../../../../lib/destination-photo";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +13,13 @@ async function updateTrip(tripId: number, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
-  const destination = String(formData.get("destination") ?? "").trim() || null;
+  const originName = String(formData.get("originName") ?? "").trim() || null;
   const startDate = String(formData.get("startDate") ?? "").trim() || null;
   const endDate = String(formData.get("endDate") ?? "").trim() || null;
-  const coverImageUrl = destination
-    ? await fetchDestinationPhoto(destination)
-    : null;
 
   await getDb()
     .update(trips)
-    .set({ name, destination, startDate, endDate, coverImageUrl })
+    .set({ name, originName, startDate, endDate })
     .where(eq(trips.id, tripId));
 
   revalidatePath(`/trips/${tripId}`);
@@ -58,6 +54,9 @@ export default async function EditTripPage({
       </Link>
 
       <h1 className="mt-2 text-3xl font-bold tracking-tight">Editar viaje</h1>
+      <p className="mt-1 text-sm text-slate-600">
+        Para sumar, editar o borrar destinos, volvé al viaje.
+      </p>
 
       <form action={updateTripBound} className="mt-6 grid max-w-md gap-3">
         <Field label="Nombre">
@@ -68,10 +67,10 @@ export default async function EditTripPage({
             className={inputCls}
           />
         </Field>
-        <Field label="Destino">
+        <Field label="Salgo desde (origen)">
           <input
-            name="destination"
-            defaultValue={trip.destination ?? ""}
+            name="originName"
+            defaultValue={trip.originName ?? ""}
             className={inputCls}
           />
         </Field>

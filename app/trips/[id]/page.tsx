@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../lib/db";
-import { trips, items, ITEM_KINDS } from "../../../drizzle/schema";
+import {
+  trips,
+  tripDestinations,
+  items,
+  ITEM_KINDS,
+  TRANSPORT_MODES,
+} from "../../../drizzle/schema";
 import { Field, inputCls, submitBtnCls } from "../../_components/form-bits";
 import { ConfirmButton } from "../../_components/ConfirmButton";
-import { KIND_LABELS, KIND_ICON, KIND_PLURAL } from "../../../lib/item-kinds";
+import {
+  KIND_LABELS,
+  KIND_ICON,
+  KIND_PLURAL,
+} from "../../../lib/item-kinds";
+import { TRANSPORT_LABELS, TRANSPORT_ICON } from "../../../lib/transport-modes";
+import { fetchDestinationPhoto } from "../../../lib/destination-photo";
 
 export const dynamic = "force-dynamic";
 
@@ -62,21 +74,21 @@ const RESOURCES: {
   {
     name: "Time Out",
     icon: "🎟️",
-    description: "Restaurantes, bares y eventos",
+    description: "Restaurantes, bares, eventos",
     urlFor: (d) =>
       `https://www.google.com/search?q=${encodeURIComponent(`site:timeout.com ${d}`)}`,
   },
   {
     name: "Wikivoyage",
     icon: "📖",
-    description: "Guía: ver, comer, dormir",
+    description: "Guía de viaje",
     urlFor: (d) =>
       `https://es.wikivoyage.org/w/index.php?search=${encodeURIComponent(d)}`,
   },
   {
     name: "Google Maps",
     icon: "🗺️",
-    description: "Mapa, lugares cerca, reviews",
+    description: "Mapa y lugares",
     urlFor: (d) =>
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d)}`,
   },
@@ -98,11 +110,9 @@ function formatItemTime(startAt: Date | null, endAt: Date | null) {
   const time = (d: Date) =>
     d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const dateTime = (d: Date) => d.toLocaleString("es-AR");
-
   if (!startAt) return dateTime(new Date(endAt!));
   const start = new Date(startAt);
   if (!endAt) return time(start);
-
   const end = new Date(endAt);
   const sameDay = start.toDateString() === end.toDateString();
   return sameDay
@@ -110,18 +120,7 @@ function formatItemTime(startAt: Date | null, endAt: Date | null) {
     : `${time(start)} → ${dateTime(end)}`;
 }
 
-type ItemRow = {
-  id: number;
-  tripId: number;
-  kind: string;
-  name: string;
-  startAt: Date | null;
-  endAt: Date | null;
-  cost: string | null;
-  link: string | null;
-  notes: string | null;
-  createdAt: Date;
-};
+type ItemRow = typeof items.$inferSelect;
 
 function groupByDay(rows: ItemRow[]) {
   const groups = new Map<string, { label: string; rows: ItemRow[] }>();
@@ -151,7 +150,53 @@ function groupByDay(rows: ItemRow[]) {
     .map(([key, g]) => ({ key, ...g }));
 }
 
-async function createItem(tripId: number, formData: FormData) {
+async function createDestination(tripId: number, formData: FormData) {
+  "use server";
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+
+  const arrivalMode = String(formData.get("arrivalMode") ?? "avion");
+  const arrivalDate = String(formData.get("arrivalDate") ?? "").trim() || null;
+  const departureDate =
+    String(formData.get("departureDate") ?? "").trim() || null;
+
+  const db = getDb();
+  const last = await db
+    .select({ orderIndex: tripDestinations.orderIndex })
+    .from(tripDestinations)
+    .where(eq(tripDestinations.tripId, tripId))
+    .orderBy(desc(tripDestinations.orderIndex))
+    .limit(1);
+  const orderIndex = (last[0]?.orderIndex ?? -1) + 1;
+
+  const coverImageUrl = await fetchDestinationPhoto(name);
+
+  await db.insert(tripDestinations).values({
+    tripId,
+    name,
+    orderIndex,
+    coverImageUrl,
+    arrivalMode,
+    arrivalDate,
+    departureDate,
+  });
+
+  revalidatePath(`/trips/${tripId}`);
+}
+
+async function deleteDestination(tripId: number, destId: number) {
+  "use server";
+  await getDb()
+    .delete(tripDestinations)
+    .where(eq(tripDestinations.id, destId));
+  revalidatePath(`/trips/${tripId}`);
+}
+
+async function createItem(
+  tripId: number,
+  destinationId: number,
+  formData: FormData
+) {
   "use server";
   const name = String(formData.get("name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "").trim();
@@ -164,7 +209,7 @@ async function createItem(tripId: number, formData: FormData) {
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   await getDb().insert(items).values({
-    tripId,
+    destinationId,
     kind,
     name,
     startAt: startAtRaw ? new Date(startAtRaw) : null,
@@ -177,7 +222,7 @@ async function createItem(tripId: number, formData: FormData) {
   revalidatePath(`/trips/${tripId}`);
 }
 
-async function deleteItem(itemId: number, tripId: number) {
+async function deleteItem(tripId: number, itemId: number) {
   "use server";
   await getDb().delete(items).where(eq(items.id, itemId));
   revalidatePath(`/trips/${tripId}`);
@@ -206,329 +251,498 @@ export default async function TripDetailPage({
   if (!Number.isFinite(tripId)) notFound();
 
   const db = getDb();
-  const [trip] = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
+  const [trip] = await db
+    .select()
+    .from(trips)
+    .where(eq(trips.id, tripId))
+    .limit(1);
   if (!trip) notFound();
 
-  const tripItems = await db
+  const dests = await db
     .select()
-    .from(items)
-    .where(eq(items.tripId, tripId))
-    .orderBy(asc(items.startAt), asc(items.createdAt));
+    .from(tripDestinations)
+    .where(eq(tripDestinations.tripId, tripId))
+    .orderBy(asc(tripDestinations.orderIndex));
 
-  const filteredItems =
-    activeTab === "all"
-      ? tripItems
-      : tripItems.filter((it) => it.kind === activeTab);
+  const allItems: ItemRow[] =
+    dests.length > 0
+      ? await db
+          .select()
+          .from(items)
+          .where(
+            inArray(
+              items.destinationId,
+              dests.map((d) => d.id)
+            )
+          )
+          .orderBy(asc(items.startAt), asc(items.createdAt))
+      : [];
 
-  const totalCost = tripItems.reduce(
-    (sum, it) => sum + (it.cost ? Number(it.cost) : 0),
-    0
-  );
-  const costByKind = ITEM_KINDS.reduce(
-    (acc, k) => {
-      acc[k] = tripItems
-        .filter((it) => it.kind === k && it.cost)
-        .reduce((s, it) => s + Number(it.cost), 0);
-      return acc;
-    },
-    {} as Record<(typeof ITEM_KINDS)[number], number>
-  );
-
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("es-AR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
-
-  const createItemBound = createItem.bind(null, tripId);
   const deleteTripBound = deleteTrip.bind(null, tripId);
+  const createDestinationBound = createDestination.bind(null, tripId);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <Link href="/trips" className="text-sm text-slate-500 hover:text-slate-700">
-        ← Todos los viajes
+        ← Mis viajes
       </Link>
 
-      {trip.coverImageUrl ? (
-        <div className="relative mt-3 h-72 overflow-hidden rounded-2xl shadow-md">
-          <img
-            src={trip.coverImageUrl}
-            alt={trip.destination ?? trip.name}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <div className="absolute right-3 top-3 flex gap-2">
-            <Link
-              href={`/trips/${tripId}/edit`}
-              className="rounded-lg bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-700 backdrop-blur transition hover:bg-white"
-            >
-              Editar
-            </Link>
-            <ConfirmButton
-              action={deleteTripBound}
-              message={`¿Borrar el viaje "${trip.name}" y todos sus items? No se puede deshacer.`}
-              className="rounded-lg bg-white/90 px-3 py-1.5 text-sm font-medium text-red-700 backdrop-blur transition hover:bg-white"
-            >
-              Borrar
-            </ConfirmButton>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-            <h1 className="text-3xl font-bold drop-shadow-md">{trip.name}</h1>
-            {trip.destination && (
-              <div className="mt-1 text-white/90 drop-shadow">
-                {trip.destination}
-              </div>
-            )}
-            {(trip.startDate || trip.endDate) && (
-              <div className="mt-1 text-sm text-white/80 drop-shadow">
-                {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
-              </div>
-            )}
-          </div>
+      <header className="mt-2 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
+          {trip.originName && (
+            <div className="mt-1 text-slate-700">
+              📍 Desde <strong>{trip.originName}</strong>
+            </div>
+          )}
+          {(trip.startDate || trip.endDate) && (
+            <div className="mt-1 text-sm text-slate-500">
+              {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
+            </div>
+          )}
         </div>
-      ) : (
-        <header className="mt-2 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
-            {trip.destination && (
-              <div className="mt-1 text-slate-700">{trip.destination}</div>
-            )}
-            {(trip.startDate || trip.endDate) && (
-              <div className="mt-1 text-sm text-slate-500">
-                {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
-              </div>
-            )}
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <Link
-              href={`/trips/${tripId}/edit`}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Editar
-            </Link>
-            <ConfirmButton
-              action={deleteTripBound}
-              message={`¿Borrar el viaje "${trip.name}" y todos sus items? No se puede deshacer.`}
-              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50"
-            >
-              Borrar
-            </ConfirmButton>
-          </div>
-        </header>
-      )}
-
-      {totalCost > 0 && (
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm font-medium text-slate-600">Total</span>
-            <span className="text-xl font-semibold tabular-nums">
-              $ {fmt(totalCost)}
-            </span>
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-            {ITEM_KINDS.filter((k) => costByKind[k] > 0).map((k) => (
-              <div key={k} className="flex justify-between">
-                <span className="text-slate-600">{KIND_LABELS[k]}</span>
-                <span className="font-medium tabular-nums">
-                  $ {fmt(costByKind[k])}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {trip.destination && (
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold">
-            Recursos para {trip.destination}
-          </h2>
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {RESOURCES.map((r) => (
-              <a
-                key={r.name}
-                href={r.urlFor(trip.destination!)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-400 hover:shadow-sm"
-              >
-                <span className="text-2xl">{r.icon}</span>
-                <div className="flex-1">
-                  <div className="font-semibold">{r.name}</div>
-                  <div className="text-xs text-slate-500">{r.description}</div>
-                </div>
-                <span className="text-slate-400" aria-hidden>
-                  ↗
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <h2 className="mt-10 text-lg font-semibold">Items</h2>
-      <div className="-mx-6 mt-3 overflow-x-auto px-6">
-        <div className="flex min-w-max gap-1.5 pb-1">
+        <div className="flex shrink-0 gap-2">
           <Link
-            href={`/trips/${tripId}`}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
-              activeTab === "all"
-                ? "bg-slate-900 text-white"
-                : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
-            }`}
+            href={`/trips/${tripId}/edit`}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            Todos
+            Editar
           </Link>
-          {TAB_KINDS.map((k) => (
-            <Link
-              key={k}
-              href={`/trips/${tripId}?view=${k}`}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                activeTab === k
-                  ? KIND_TAB_ACTIVE[k]
-                  : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
-              }`}
-            >
-              <span className="mr-1">{KIND_ICON[k]}</span>
-              {KIND_PLURAL[k]}
-            </Link>
-          ))}
+          <ConfirmButton
+            action={deleteTripBound}
+            message={`¿Borrar el viaje "${trip.name}" con todos sus destinos e items? No se puede deshacer.`}
+            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50"
+          >
+            Borrar
+          </ConfirmButton>
         </div>
-      </div>
-      {tripItems.length === 0 ? (
-        <p className="mt-4 text-slate-600">
-          Todavía no hay items. Sumá el primero abajo.
-        </p>
-      ) : filteredItems.length === 0 ? (
-        <p className="mt-4 text-slate-600">
-          Todavía no hay {KIND_PLURAL[activeTab as (typeof TAB_KINDS)[number]].toLowerCase()} en este viaje.
+      </header>
+
+      {dests.length > 0 && (
+        <div className="-mx-6 mt-6 overflow-x-auto px-6">
+          <div className="flex min-w-max items-center gap-2 text-sm">
+            {trip.originName && (
+              <span className="rounded-full border border-slate-300 bg-white px-3 py-1 font-medium">
+                📍 {trip.originName}
+              </span>
+            )}
+            {dests.map((d, idx) => (
+              <span key={d.id} className="flex items-center gap-2">
+                <span className="text-lg">
+                  {TRANSPORT_ICON[
+                    d.arrivalMode as (typeof TRANSPORT_MODES)[number]
+                  ] ?? TRANSPORT_ICON.otro}
+                </span>
+                <a
+                  href={`#dest-${d.id}`}
+                  className="rounded-full border border-slate-300 bg-white px-3 py-1 font-medium hover:border-slate-500"
+                >
+                  {d.name}
+                </a>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dests.length === 0 ? (
+        <p className="mt-8 text-slate-600">
+          Tu viaje todavía no tiene destinos. Sumá el primero abajo.
         </p>
       ) : (
-        <div className="mt-4 space-y-6">
-          {groupByDay(filteredItems).map(({ key, label, rows }) => (
-            <section key={key}>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {label}
-              </h3>
-              <ul className="space-y-2">
-                {rows.map((it) => {
-                  const kind = it.kind as (typeof ITEM_KINDS)[number];
-                  const deleteItemBound = deleteItem.bind(null, it.id, tripId);
-                  const timeLabel = formatItemTime(it.startAt, it.endAt);
-                  return (
-                    <li
-                      key={it.id}
-                      className={`rounded-xl border border-slate-200 border-l-4 bg-white px-4 py-3 ${
-                        KIND_BORDER[kind] ?? KIND_BORDER.otro
+        <div className="mt-8 space-y-12">
+          {dests.map((dest, idx) => {
+            const prev = idx > 0 ? dests[idx - 1] : null;
+            const fromName = prev?.name ?? trip.originName ?? null;
+            const arrivalMode =
+              dest.arrivalMode as (typeof TRANSPORT_MODES)[number];
+            const destItems = allItems.filter(
+              (it) => it.destinationId === dest.id
+            );
+            const filteredItems =
+              activeTab === "all"
+                ? destItems
+                : destItems.filter((it) => it.kind === activeTab);
+            const deleteDestBound = deleteDestination.bind(null, tripId, dest.id);
+            const createItemBound = createItem.bind(null, tripId, dest.id);
+
+            return (
+              <section
+                key={dest.id}
+                id={`dest-${dest.id}`}
+                className="scroll-mt-4"
+              >
+                {dest.coverImageUrl ? (
+                  <div className="relative h-72 overflow-hidden rounded-2xl shadow-md">
+                    <img
+                      src={dest.coverImageUrl}
+                      alt={dest.name}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                    <div className="absolute right-3 top-3 flex gap-2">
+                      <Link
+                        href={`/trips/${tripId}/destinations/${dest.id}/edit`}
+                        className="rounded-lg bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-700 backdrop-blur transition hover:bg-white"
+                      >
+                        Editar
+                      </Link>
+                      <ConfirmButton
+                        action={deleteDestBound}
+                        message={`¿Borrar el destino "${dest.name}" y todos sus items?`}
+                        className="rounded-lg bg-white/90 px-3 py-1.5 text-sm font-medium text-red-700 backdrop-blur transition hover:bg-white"
+                      >
+                        Borrar
+                      </ConfirmButton>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+                      <h2 className="text-3xl font-bold drop-shadow-md">
+                        {dest.name}
+                      </h2>
+                      {(dest.arrivalDate || dest.departureDate) && (
+                        <div className="mt-1 text-sm text-white/90 drop-shadow">
+                          {dest.arrivalDate ?? "?"} →{" "}
+                          {dest.departureDate ?? "?"}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
+                    <div>
+                      <h2 className="text-2xl font-bold tracking-tight">
+                        {dest.name}
+                      </h2>
+                      {(dest.arrivalDate || dest.departureDate) && (
+                        <div className="mt-1 text-sm text-slate-500">
+                          {dest.arrivalDate ?? "?"} →{" "}
+                          {dest.departureDate ?? "?"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Link
+                        href={`/trips/${tripId}/destinations/${dest.id}/edit`}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        Editar
+                      </Link>
+                      <ConfirmButton
+                        action={deleteDestBound}
+                        message={`¿Borrar el destino "${dest.name}" y todos sus items?`}
+                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50"
+                      >
+                        Borrar
+                      </ConfirmButton>
+                    </div>
+                  </div>
+                )}
+
+                {fromName && (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Llegaste en{" "}
+                    <span className="text-base">
+                      {TRANSPORT_ICON[arrivalMode] ?? TRANSPORT_ICON.otro}
+                    </span>{" "}
+                    {TRANSPORT_LABELS[arrivalMode] ?? "Otro"} desde{" "}
+                    <strong>{fromName}</strong>
+                  </p>
+                )}
+
+                <section className="mt-5">
+                  <h3 className="text-sm font-semibold text-slate-700">
+                    Recursos para {dest.name}
+                  </h3>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {RESOURCES.map((r) => (
+                      <a
+                        key={r.name}
+                        href={r.urlFor(dest.name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-400 hover:shadow-sm"
+                      >
+                        <span className="text-xl">{r.icon}</span>
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold">{r.name}</div>
+                          <div className="text-xs text-slate-500">
+                            {r.description}
+                          </div>
+                        </div>
+                        <span className="text-slate-400" aria-hidden>
+                          ↗
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+
+                <h3 className="mt-6 text-sm font-semibold text-slate-700">
+                  Items
+                </h3>
+                <div className="-mx-6 mt-2 overflow-x-auto px-6">
+                  <div className="flex min-w-max gap-1.5 pb-1">
+                    <Link
+                      href={`/trips/${tripId}#dest-${dest.id}`}
+                      scroll={false}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                        activeTab === "all"
+                          ? "bg-slate-900 text-white"
+                          : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="font-semibold">{it.name}</span>
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            KIND_BADGE[kind] ?? KIND_BADGE.otro
-                          }`}
-                        >
-                          <span className="mr-1">{KIND_ICON[kind] ?? KIND_ICON.otro}</span>
-                          {KIND_LABELS[kind] ?? it.kind}
-                        </span>
+                      Todos
+                    </Link>
+                    {TAB_KINDS.map((k) => (
+                      <Link
+                        key={k}
+                        href={`/trips/${tripId}?view=${k}#dest-${dest.id}`}
+                        scroll={false}
+                        className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                          activeTab === k
+                            ? KIND_TAB_ACTIVE[k]
+                            : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+                        }`}
+                      >
+                        <span className="mr-1">{KIND_ICON[k]}</span>
+                        {KIND_PLURAL[k]}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {destItems.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Sin items todavía. Sumá el primero abajo.
+                  </p>
+                ) : filteredItems.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Sin{" "}
+                    {KIND_PLURAL[
+                      activeTab as (typeof TAB_KINDS)[number]
+                    ].toLowerCase()}{" "}
+                    en {dest.name}.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-5">
+                    {groupByDay(filteredItems).map(({ key, label, rows }) => (
+                      <div key={key}>
+                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {label}
+                        </h4>
+                        <ul className="space-y-2">
+                          {rows.map((it) => {
+                            const kind = it.kind as (typeof ITEM_KINDS)[number];
+                            const deleteItemBound = deleteItem.bind(
+                              null,
+                              tripId,
+                              it.id
+                            );
+                            const timeLabel = formatItemTime(
+                              it.startAt,
+                              it.endAt
+                            );
+                            return (
+                              <li
+                                key={it.id}
+                                className={`rounded-xl border border-slate-200 border-l-4 bg-white px-4 py-3 ${
+                                  KIND_BORDER[kind] ?? KIND_BORDER.otro
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <span className="font-semibold">
+                                    {it.name}
+                                  </span>
+                                  <span
+                                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                      KIND_BADGE[kind] ?? KIND_BADGE.otro
+                                    }`}
+                                  >
+                                    <span className="mr-1">
+                                      {KIND_ICON[kind] ?? KIND_ICON.otro}
+                                    </span>
+                                    {KIND_LABELS[kind] ?? it.kind}
+                                  </span>
+                                </div>
+                                {timeLabel && (
+                                  <div className="mt-1 text-sm tabular-nums text-slate-500">
+                                    {timeLabel}
+                                  </div>
+                                )}
+                                {it.cost && (
+                                  <div className="mt-1 text-sm text-slate-700">
+                                    $ {it.cost}
+                                  </div>
+                                )}
+                                {it.link && (
+                                  <div className="mt-1 text-sm">
+                                    <a
+                                      href={it.link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sky-700 underline-offset-2 hover:underline"
+                                    >
+                                      {it.link}
+                                    </a>
+                                  </div>
+                                )}
+                                {it.notes && (
+                                  <div className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                                    {it.notes}
+                                  </div>
+                                )}
+                                <div className="mt-3 flex gap-2 text-sm">
+                                  <Link
+                                    href={`/trips/${tripId}/items/${it.id}/edit`}
+                                    className="font-medium text-slate-700 hover:text-slate-900"
+                                  >
+                                    Editar
+                                  </Link>
+                                  <span className="text-slate-300">·</span>
+                                  <ConfirmButton
+                                    action={deleteItemBound}
+                                    message={`¿Borrar "${it.name}"?`}
+                                    className="font-medium text-red-700 hover:text-red-900"
+                                  >
+                                    Borrar
+                                  </ConfirmButton>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
-                      {timeLabel && (
-                        <div className="mt-1 text-sm text-slate-500 tabular-nums">
-                          {timeLabel}
-                        </div>
-                      )}
-                      {it.cost && (
-                        <div className="mt-1 text-sm text-slate-700">$ {it.cost}</div>
-                      )}
-                      {it.link && (
-                        <div className="mt-1 text-sm">
-                          <a
-                            href={it.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sky-700 underline-offset-2 hover:underline"
-                          >
-                            {it.link}
-                          </a>
-                        </div>
-                      )}
-                      {it.notes && (
-                        <div className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-                          {it.notes}
-                        </div>
-                      )}
-                      <div className="mt-3 flex gap-2 text-sm">
-                        <Link
-                          href={`/trips/${tripId}/items/${it.id}/edit`}
-                          className="font-medium text-slate-700 hover:text-slate-900"
-                        >
-                          Editar
-                        </Link>
-                        <span className="text-slate-300">·</span>
-                        <ConfirmButton
-                          action={deleteItemBound}
-                          message={`¿Borrar "${it.name}"?`}
-                          className="font-medium text-red-700 hover:text-red-900"
-                        >
-                          Borrar
-                        </ConfirmButton>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
+                    ))}
+                  </div>
+                )}
+
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-700 hover:text-slate-900">
+                    + Sumar item a {dest.name}
+                  </summary>
+                  <form
+                    action={createItemBound}
+                    className="mt-3 grid max-w-lg gap-3"
+                  >
+                    <Field label="Tipo">
+                      <select
+                        name="kind"
+                        required
+                        defaultValue="vuelo"
+                        className={inputCls}
+                      >
+                        {ITEM_KINDS.map((k) => (
+                          <option key={k} value={k}>
+                            {KIND_ICON[k]}  {KIND_LABELS[k]}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Nombre">
+                      <input
+                        name="name"
+                        required
+                        placeholder="AA1234 BUE→FCO"
+                        className={inputCls}
+                      />
+                    </Field>
+                    <div className="flex gap-3">
+                      <Field label="Desde" className="flex-1">
+                        <input
+                          name="startAt"
+                          type="datetime-local"
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Hasta" className="flex-1">
+                        <input
+                          name="endAt"
+                          type="datetime-local"
+                          className={inputCls}
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Costo">
+                      <input
+                        name="cost"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        className={inputCls}
+                      />
+                    </Field>
+                    <Field label="Link (booking, mail, etc.)">
+                      <input
+                        name="link"
+                        type="url"
+                        placeholder="https://..."
+                        className={inputCls}
+                      />
+                    </Field>
+                    <Field label="Notas">
+                      <textarea
+                        name="notes"
+                        rows={3}
+                        className={`${inputCls} resize-y`}
+                      />
+                    </Field>
+                    <button type="submit" className={submitBtnCls}>
+                      Guardar item
+                    </button>
+                  </form>
+                </details>
+              </section>
+            );
+          })}
         </div>
       )}
 
-      <h2 className="mt-12 text-lg font-semibold">Nuevo item</h2>
-      <form action={createItemBound} className="mt-3 grid max-w-lg gap-3">
-        <Field label="Tipo">
-          <select name="kind" required defaultValue="vuelo" className={inputCls}>
-            {ITEM_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {KIND_ICON[k]}  {KIND_LABELS[k]}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Nombre">
-          <input
-            name="name"
-            required
-            placeholder="AA1234 BUE→BRC"
-            className={inputCls}
-          />
-        </Field>
-        <div className="flex gap-3">
-          <Field label="Desde" className="flex-1">
-            <input name="startAt" type="datetime-local" className={inputCls} />
+      <section className="mt-12 rounded-xl border border-dashed border-slate-300 bg-white/60 p-5">
+        <h2 className="text-lg font-semibold">
+          {dests.length === 0 ? "Primer destino" : "Sumar otro destino"}
+        </h2>
+        <form action={createDestinationBound} className="mt-3 grid max-w-md gap-3">
+          <Field label="Nombre">
+            <input
+              name="name"
+              required
+              placeholder="Roma"
+              className={inputCls}
+            />
           </Field>
-          <Field label="Hasta" className="flex-1">
-            <input name="endAt" type="datetime-local" className={inputCls} />
+          <Field
+            label={
+              dests.length === 0
+                ? `Cómo llegás desde ${trip.originName ?? "el origen"}`
+                : `Cómo llegás desde ${dests[dests.length - 1].name}`
+            }
+          >
+            <select
+              name="arrivalMode"
+              required
+              defaultValue="avion"
+              className={inputCls}
+            >
+              {TRANSPORT_MODES.map((m) => (
+                <option key={m} value={m}>
+                  {TRANSPORT_ICON[m]}  {TRANSPORT_LABELS[m]}
+                </option>
+              ))}
+            </select>
           </Field>
-        </div>
-        <Field label="Costo">
-          <input
-            name="cost"
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Link (booking, mail, etc.)">
-          <input name="link" type="url" placeholder="https://..." className={inputCls} />
-        </Field>
-        <Field label="Notas">
-          <textarea name="notes" rows={3} className={`${inputCls} resize-y`} />
-        </Field>
-        <button type="submit" className={submitBtnCls}>
-          Guardar item
-        </button>
-      </form>
+          <div className="flex gap-3">
+            <Field label="Llegada" className="flex-1">
+              <input name="arrivalDate" type="date" className={inputCls} />
+            </Field>
+            <Field label="Salida" className="flex-1">
+              <input name="departureDate" type="date" className={inputCls} />
+            </Field>
+          </div>
+          <button type="submit" className={submitBtnCls}>
+            Guardar destino
+          </button>
+        </form>
+      </section>
     </main>
   );
 }
