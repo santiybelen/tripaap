@@ -2,12 +2,13 @@
 -- Each block matches the corresponding pgTable in drizzle/schema.ts.
 
 CREATE TABLE IF NOT EXISTS trips (
-  id           SERIAL PRIMARY KEY,
-  name         TEXT NOT NULL,
-  destination  TEXT,
-  start_date   DATE,
-  end_date     DATE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                SERIAL PRIMARY KEY,
+  name              TEXT NOT NULL,
+  destination       TEXT,
+  start_date        DATE,
+  end_date          DATE,
+  cover_image_url   TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS items (

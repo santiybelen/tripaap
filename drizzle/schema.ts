@@ -15,6 +15,7 @@ export const trips = pgTable("trips", {
   destination: text("destination"),
   startDate: date("start_date"),
   endDate: date("end_date"),
+  coverImageUrl: text("cover_image_url"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

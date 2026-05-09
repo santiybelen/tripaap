@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../lib/db";
 import { trips } from "../../../../drizzle/schema";
 import { Field, inputCls, submitBtnCls } from "../../../_components/form-bits";
+import { fetchDestinationPhoto } from "../../../../lib/destination-photo";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,13 @@ async function updateTrip(tripId: number, formData: FormData) {
   const destination = String(formData.get("destination") ?? "").trim() || null;
   const startDate = String(formData.get("startDate") ?? "").trim() || null;
   const endDate = String(formData.get("endDate") ?? "").trim() || null;
+  const coverImageUrl = destination
+    ? await fetchDestinationPhoto(destination)
+    : null;
 
   await getDb()
     .update(trips)
-    .set({ name, destination, startDate, endDate })
+    .set({ name, destination, startDate, endDate, coverImageUrl })
     .where(eq(trips.id, tripId));
 
   revalidatePath(`/trips/${tripId}`);

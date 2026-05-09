@@ -193,34 +193,73 @@ export default async function TripDetailPage({
         ← Todos los viajes
       </Link>
 
-      <header className="mt-2 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
-          {trip.destination && (
-            <div className="mt-1 text-slate-700">{trip.destination}</div>
-          )}
-          {(trip.startDate || trip.endDate) && (
-            <div className="mt-1 text-sm text-slate-500">
-              {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
-            </div>
-          )}
+      {trip.coverImageUrl ? (
+        <div className="relative mt-3 h-72 overflow-hidden rounded-2xl shadow-md">
+          <img
+            src={trip.coverImageUrl}
+            alt={trip.destination ?? trip.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="absolute right-3 top-3 flex gap-2">
+            <Link
+              href={`/trips/${tripId}/edit`}
+              className="rounded-lg bg-white/90 px-3 py-1.5 text-sm font-medium text-slate-700 backdrop-blur transition hover:bg-white"
+            >
+              Editar
+            </Link>
+            <ConfirmButton
+              action={deleteTripBound}
+              message={`¿Borrar el viaje "${trip.name}" y todos sus items? No se puede deshacer.`}
+              className="rounded-lg bg-white/90 px-3 py-1.5 text-sm font-medium text-red-700 backdrop-blur transition hover:bg-white"
+            >
+              Borrar
+            </ConfirmButton>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+            <h1 className="text-3xl font-bold drop-shadow-md">{trip.name}</h1>
+            {trip.destination && (
+              <div className="mt-1 text-white/90 drop-shadow">
+                {trip.destination}
+              </div>
+            )}
+            {(trip.startDate || trip.endDate) && (
+              <div className="mt-1 text-sm text-white/80 drop-shadow">
+                {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <Link
-            href={`/trips/${tripId}/edit`}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Editar
-          </Link>
-          <ConfirmButton
-            action={deleteTripBound}
-            message={`¿Borrar el viaje "${trip.name}" y todos sus items? No se puede deshacer.`}
-            className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50"
-          >
-            Borrar
-          </ConfirmButton>
-        </div>
-      </header>
+      ) : (
+        <header className="mt-2 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
+            {trip.destination && (
+              <div className="mt-1 text-slate-700">{trip.destination}</div>
+            )}
+            {(trip.startDate || trip.endDate) && (
+              <div className="mt-1 text-sm text-slate-500">
+                {trip.startDate ?? "?"} → {trip.endDate ?? "?"}
+              </div>
+            )}
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Link
+              href={`/trips/${tripId}/edit`}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Editar
+            </Link>
+            <ConfirmButton
+              action={deleteTripBound}
+              message={`¿Borrar el viaje "${trip.name}" y todos sus items? No se puede deshacer.`}
+              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50"
+            >
+              Borrar
+            </ConfirmButton>
+          </div>
+        </header>
+      )}
 
       {totalCost > 0 && (
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
