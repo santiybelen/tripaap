@@ -21,6 +21,7 @@ import { TRANSPORT_LABELS, TRANSPORT_ICON } from "../../../lib/transport-modes";
 import { fetchDestinationPhoto } from "../../../lib/destination-photo";
 import { parseSlug, buildSlug } from "../../../lib/trip-slug";
 import { getTraveler, setTraveler } from "../../../lib/traveler";
+import { fetchPageTitle } from "../../../lib/url-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -212,9 +213,9 @@ async function createItem(
   formData: FormData
 ) {
   "use server";
-  const name = String(formData.get("name") ?? "").trim();
+  const rawName = String(formData.get("name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "").trim();
-  if (!name || !ITEM_KINDS.includes(kind as (typeof ITEM_KINDS)[number])) return;
+  if (!ITEM_KINDS.includes(kind as (typeof ITEM_KINDS)[number])) return;
 
   const startAtRaw = String(formData.get("startAt") ?? "").trim();
   const endAtRaw = String(formData.get("endAt") ?? "").trim();
@@ -222,6 +223,13 @@ async function createItem(
   const link = String(formData.get("link") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const traveler = await getTraveler();
+
+  let name = rawName;
+  if (!name && link) {
+    const fetched = await fetchPageTitle(link);
+    if (fetched) name = fetched;
+  }
+  if (!name) return;
 
   await getDb().insert(items).values({
     destinationId,
@@ -684,10 +692,13 @@ export default async function TripDetailPage({
                     <Field label="Nombre">
                       <input
                         name="name"
-                        required
                         placeholder="AA1234 BUE→FCO"
                         className={inputCls}
                       />
+                      <span className="mt-1 block text-xs text-slate-500">
+                        Tip: dejalo vacío y pegá el link abajo. Lo completamos
+                        con el título de la página.
+                      </span>
                     </Field>
                     <div className="flex gap-3">
                       <Field label="Desde" className="flex-1">

@@ -20,6 +20,7 @@ import {
   KIND_ICON,
 } from "../../../../../../lib/item-kinds";
 import { parseSlug } from "../../../../../../lib/trip-slug";
+import { fetchPageTitle } from "../../../../../../lib/url-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -32,15 +33,22 @@ async function updateItem(
   const parsed = parseSlug(slug);
   if (!parsed) return;
 
-  const name = String(formData.get("name") ?? "").trim();
+  const rawName = String(formData.get("name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "").trim();
-  if (!name || !ITEM_KINDS.includes(kind as (typeof ITEM_KINDS)[number])) return;
+  if (!ITEM_KINDS.includes(kind as (typeof ITEM_KINDS)[number])) return;
 
   const startAtRaw = String(formData.get("startAt") ?? "").trim();
   const endAtRaw = String(formData.get("endAt") ?? "").trim();
   const costRaw = String(formData.get("cost") ?? "").trim();
   const link = String(formData.get("link") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  let name = rawName;
+  if (!name && link) {
+    const fetched = await fetchPageTitle(link);
+    if (fetched) name = fetched;
+  }
+  if (!name) return;
 
   await getDb()
     .update(items)
@@ -125,10 +133,13 @@ export default async function EditItemPage({
         <Field label="Nombre">
           <input
             name="name"
-            required
             defaultValue={item.name}
             className={inputCls}
           />
+          <span className="mt-1 block text-xs text-slate-500">
+            Si lo dejás vacío, lo completamos con el título de la página del
+            link.
+          </span>
         </Field>
         <div className="flex gap-3">
           <Field label="Desde" className="flex-1">
