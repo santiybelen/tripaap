@@ -10,17 +10,9 @@ import {
   submitBtnCls,
   toLocalDatetime,
 } from "../../../../../_components/form-bits";
+import { KIND_LABELS, KIND_ICON } from "../../../../../../lib/item-kinds";
 
 export const dynamic = "force-dynamic";
-
-const KIND_LABELS: Record<(typeof ITEM_KINDS)[number], string> = {
-  vuelo: "Vuelo",
-  hotel: "Hotel",
-  auto: "Auto",
-  excursion: "Excursión",
-  restaurante: "Restaurante",
-  otro: "Otro",
-};
 
 async function updateItem(
   itemId: number,
@@ -95,7 +87,7 @@ export default async function EditItemPage({
           >
             {ITEM_KINDS.map((k) => (
               <option key={k} value={k}>
-                {KIND_LABELS[k]}
+                {KIND_ICON[k]}  {KIND_LABELS[k]}
               </option>
             ))}
           </select>

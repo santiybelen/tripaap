@@ -6,17 +6,9 @@ import { getDb } from "../../../lib/db";
 import { trips, items, ITEM_KINDS } from "../../../drizzle/schema";
 import { Field, inputCls, submitBtnCls } from "../../_components/form-bits";
 import { ConfirmButton } from "../../_components/ConfirmButton";
+import { KIND_LABELS, KIND_ICON } from "../../../lib/item-kinds";
 
 export const dynamic = "force-dynamic";
-
-const KIND_LABELS: Record<(typeof ITEM_KINDS)[number], string> = {
-  vuelo: "Vuelo",
-  hotel: "Hotel",
-  auto: "Auto",
-  excursion: "Excursión",
-  restaurante: "Restaurante",
-  otro: "Otro",
-};
 
 const KIND_BADGE: Record<(typeof ITEM_KINDS)[number], string> = {
   vuelo: "bg-sky-100 text-sky-800",
@@ -25,6 +17,15 @@ const KIND_BADGE: Record<(typeof ITEM_KINDS)[number], string> = {
   excursion: "bg-emerald-100 text-emerald-800",
   restaurante: "bg-rose-100 text-rose-800",
   otro: "bg-slate-100 text-slate-700",
+};
+
+const KIND_BORDER: Record<(typeof ITEM_KINDS)[number], string> = {
+  vuelo: "border-l-sky-500",
+  hotel: "border-l-violet-500",
+  auto: "border-l-amber-500",
+  excursion: "border-l-emerald-500",
+  restaurante: "border-l-rose-500",
+  otro: "border-l-slate-400",
 };
 
 function capitalize(s: string) {
@@ -281,6 +282,11 @@ export default async function TripDetailPage({
           ).map(({ key, label, rows }) => (
             <section key={key}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {groupedByKind && (
+                  <span className="mr-1.5 text-base">
+                    {KIND_ICON[key as (typeof ITEM_KINDS)[number]] ?? ""}
+                  </span>
+                )}
                 {label}
               </h3>
               <ul className="space-y-2">
@@ -295,7 +301,9 @@ export default async function TripDetailPage({
                   return (
                     <li
                       key={it.id}
-                      className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+                      className={`rounded-xl border border-slate-200 border-l-4 bg-white px-4 py-3 ${
+                        KIND_BORDER[kind] ?? KIND_BORDER.otro
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <span className="font-semibold">{it.name}</span>
@@ -304,6 +312,7 @@ export default async function TripDetailPage({
                             KIND_BADGE[kind] ?? KIND_BADGE.otro
                           }`}
                         >
+                          <span className="mr-1">{KIND_ICON[kind] ?? KIND_ICON.otro}</span>
                           {KIND_LABELS[kind] ?? it.kind}
                         </span>
                       </div>
@@ -363,7 +372,7 @@ export default async function TripDetailPage({
           <select name="kind" required defaultValue="vuelo" className={inputCls}>
             {ITEM_KINDS.map((k) => (
               <option key={k} value={k}>
-                {KIND_LABELS[k]}
+                {KIND_ICON[k]}  {KIND_LABELS[k]}
               </option>
             ))}
           </select>
