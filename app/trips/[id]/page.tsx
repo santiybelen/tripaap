@@ -21,7 +21,7 @@ import { TRANSPORT_LABELS, TRANSPORT_ICON } from "../../../lib/transport-modes";
 import { fetchDestinationPhoto } from "../../../lib/destination-photo";
 import { parseSlug, buildSlug } from "../../../lib/trip-slug";
 import { getTraveler, setTraveler } from "../../../lib/traveler";
-import { fetchPageTitle } from "../../../lib/url-meta";
+import { fetchPageTitle, hostnameOf } from "../../../lib/url-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -227,7 +227,7 @@ async function createItem(
   let name = rawName;
   if (!name && link) {
     const fetched = await fetchPageTitle(link);
-    if (fetched) name = fetched;
+    name = fetched ?? hostnameOf(link) ?? "";
   }
   if (!name) return;
 

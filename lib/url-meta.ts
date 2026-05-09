@@ -12,6 +12,14 @@ function decodeEntities(s: string): string {
     );
 }
 
+export function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchPageTitle(url: string): Promise<string | null> {
   if (!/^https?:\/\//i.test(url)) return null;
 
@@ -19,8 +27,10 @@ export async function fetchPageTitle(url: string): Promise<string | null> {
     const res = await fetch(url, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Tripaap/0.1; +https://github.com/santiybelen/tripaap)",
-        Accept: "text/html,application/xhtml+xml",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
       },
       signal: AbortSignal.timeout(5000),
     });

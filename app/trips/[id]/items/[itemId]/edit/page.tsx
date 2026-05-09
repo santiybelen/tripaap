@@ -20,7 +20,7 @@ import {
   KIND_ICON,
 } from "../../../../../../lib/item-kinds";
 import { parseSlug } from "../../../../../../lib/trip-slug";
-import { fetchPageTitle } from "../../../../../../lib/url-meta";
+import { fetchPageTitle, hostnameOf } from "../../../../../../lib/url-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +46,7 @@ async function updateItem(
   let name = rawName;
   if (!name && link) {
     const fetched = await fetchPageTitle(link);
-    if (fetched) name = fetched;
+    name = fetched ?? hostnameOf(link) ?? "";
   }
   if (!name) return;
 
