@@ -49,7 +49,9 @@ export default async function TripsPage() {
         ← Inicio
       </Link>
 
-      <h1 className="mt-2 text-3xl font-bold tracking-tight">Mis viajes</h1>
+      <h1 className="mt-2 bg-gradient-to-r from-sky-700 via-violet-700 to-rose-600 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent">
+        Mis viajes
+      </h1>
       <p className="mt-1 text-sm text-slate-500">
         Si te compartieron un viaje, abrí el link directamente. Acá creás los
         tuyos.
@@ -69,7 +71,7 @@ export default async function TripsPage() {
             <li key={t.id}>
               <Link
                 href={`/trips/${buildSlug(t.id, t.shareToken)}`}
-                className="block rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-400 hover:shadow-sm"
+                className="block rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:-translate-y-px hover:border-slate-400 hover:shadow-md"
               >
                 <div className="font-semibold">{t.name}</div>
                 {t.originName && (

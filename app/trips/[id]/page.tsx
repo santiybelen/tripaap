@@ -323,11 +323,13 @@ export default async function TripDetailPage({
         </span>
       </div>
 
-      <header className="mt-2 flex items-start justify-between gap-4">
+      <header className="mt-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{trip.name}</h1>
+          <h1 className="bg-gradient-to-r from-sky-700 via-violet-700 to-rose-600 bg-clip-text text-5xl font-extrabold tracking-tight text-transparent">
+            {trip.name}
+          </h1>
           {trip.originName && (
-            <div className="mt-1 text-slate-700">
+            <div className="mt-2 text-slate-700">
               📍 Desde <strong>{trip.originName}</strong>
             </div>
           )}
@@ -355,27 +357,47 @@ export default async function TripDetailPage({
       </header>
 
       {dests.length > 0 && (
-        <div className="-mx-6 mt-6 overflow-x-auto px-6">
-          <div className="flex min-w-max items-center gap-2 text-sm">
+        <div className="-mx-6 mt-8 overflow-x-auto px-6">
+          <div className="flex min-w-max items-center gap-3">
             {trip.originName && (
-              <span className="rounded-full border border-slate-300 bg-white px-3 py-1 font-medium">
-                📍 {trip.originName}
-              </span>
+              <div className="flex shrink-0 flex-col items-center gap-1.5">
+                <div className="flex size-16 items-center justify-center rounded-full border-2 border-slate-300 bg-white text-2xl shadow-sm">
+                  📍
+                </div>
+                <span className="max-w-20 truncate text-center text-xs font-medium text-slate-700">
+                  {trip.originName}
+                </span>
+              </div>
             )}
             {dests.map((d) => (
-              <span key={d.id} className="flex items-center gap-2">
-                <span className="text-lg">
+              <div key={d.id} className="flex shrink-0 items-center gap-3">
+                <span className="text-2xl">
                   {TRANSPORT_ICON[
                     d.arrivalMode as (typeof TRANSPORT_MODES)[number]
                   ] ?? TRANSPORT_ICON.otro}
                 </span>
                 <a
                   href={`#dest-${d.id}`}
-                  className="rounded-full border border-slate-300 bg-white px-3 py-1 font-medium hover:border-slate-500"
+                  className="group flex flex-col items-center gap-1.5"
                 >
-                  {d.name}
+                  <div className="size-16 overflow-hidden rounded-full border-2 border-slate-300 bg-slate-100 shadow-sm transition group-hover:scale-105 group-hover:border-slate-500 group-hover:shadow-md">
+                    {d.coverImageUrl ? (
+                      <img
+                        src={d.coverImageUrl}
+                        alt={d.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-2xl">
+                        📍
+                      </div>
+                    )}
+                  </div>
+                  <span className="max-w-20 truncate text-center text-xs font-medium text-slate-700">
+                    {d.name}
+                  </span>
                 </a>
-              </span>
+              </div>
             ))}
           </div>
         </div>
@@ -506,7 +528,7 @@ export default async function TripDetailPage({
                         href={r.urlFor(dest.name)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-400 hover:shadow-sm"
+                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:-translate-y-px hover:border-slate-400 hover:shadow-md"
                       >
                         <span className="text-xl">{r.icon}</span>
                         <div className="flex-1">
@@ -573,7 +595,8 @@ export default async function TripDetailPage({
                   <div className="mt-3 space-y-5">
                     {groupByDay(filteredItems).map(({ key, label, rows }) => (
                       <div key={key}>
-                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <h4 className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-sm">
+                          <span aria-hidden>📅</span>
                           {label}
                         </h4>
                         <ul className="space-y-2">
@@ -591,7 +614,7 @@ export default async function TripDetailPage({
                             return (
                               <li
                                 key={it.id}
-                                className={`rounded-xl border border-slate-200 border-l-4 bg-white px-4 py-3 ${
+                                className={`rounded-xl border border-slate-200 border-l-4 bg-white px-4 py-3 transition hover:-translate-y-px hover:shadow-md ${
                                   KIND_BORDER[kind] ?? KIND_BORDER.otro
                                 }`}
                               >
