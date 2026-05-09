@@ -84,6 +84,26 @@ export default async function TripDetailPage({
     .where(eq(items.tripId, tripId))
     .orderBy(asc(items.startAt), asc(items.createdAt));
 
+  const totalCost = tripItems.reduce(
+    (sum, it) => sum + (it.cost ? Number(it.cost) : 0),
+    0
+  );
+  const costByKind = ITEM_KINDS.reduce(
+    (acc, k) => {
+      acc[k] = tripItems
+        .filter((it) => it.kind === k && it.cost)
+        .reduce((s, it) => s + Number(it.cost), 0);
+      return acc;
+    },
+    {} as Record<(typeof ITEM_KINDS)[number], number>
+  );
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+
   const createItemBound = createItem.bind(null, tripId);
   const deleteTripBound = deleteTrip.bind(null, tripId);
 
@@ -121,6 +141,27 @@ export default async function TripDetailPage({
           </ConfirmButton>
         </div>
       </header>
+
+      {totalCost > 0 && (
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm font-medium text-slate-600">Total</span>
+            <span className="text-xl font-semibold tabular-nums">
+              $ {fmt(totalCost)}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+            {ITEM_KINDS.filter((k) => costByKind[k] > 0).map((k) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-slate-600">{KIND_LABELS[k]}</span>
+                <span className="font-medium tabular-nums">
+                  $ {fmt(costByKind[k])}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <h2 className="mt-10 text-lg font-semibold">Items</h2>
       {tripItems.length === 0 ? (
