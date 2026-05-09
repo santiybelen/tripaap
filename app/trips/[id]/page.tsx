@@ -6,7 +6,7 @@ import { getDb } from "../../../lib/db";
 import { trips, items, ITEM_KINDS } from "../../../drizzle/schema";
 import { Field, inputCls, submitBtnCls } from "../../_components/form-bits";
 import { ConfirmButton } from "../../_components/ConfirmButton";
-import { KIND_LABELS, KIND_ICON } from "../../../lib/item-kinds";
+import { KIND_LABELS, KIND_ICON, KIND_PLURAL } from "../../../lib/item-kinds";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +14,10 @@ const KIND_BADGE: Record<(typeof ITEM_KINDS)[number], string> = {
   vuelo: "bg-sky-100 text-sky-800",
   hotel: "bg-violet-100 text-violet-800",
   auto: "bg-amber-100 text-amber-800",
-  excursion: "bg-emerald-100 text-emerald-800",
   restaurante: "bg-rose-100 text-rose-800",
+  bar: "bg-yellow-100 text-yellow-800",
+  disco: "bg-fuchsia-100 text-fuchsia-800",
+  excursion: "bg-emerald-100 text-emerald-800",
   otro: "bg-slate-100 text-slate-700",
 };
 
@@ -23,10 +25,33 @@ const KIND_BORDER: Record<(typeof ITEM_KINDS)[number], string> = {
   vuelo: "border-l-sky-500",
   hotel: "border-l-violet-500",
   auto: "border-l-amber-500",
-  excursion: "border-l-emerald-500",
   restaurante: "border-l-rose-500",
+  bar: "border-l-yellow-500",
+  disco: "border-l-fuchsia-500",
+  excursion: "border-l-emerald-500",
   otro: "border-l-slate-400",
 };
+
+const KIND_TAB_ACTIVE: Record<(typeof ITEM_KINDS)[number], string> = {
+  vuelo: "bg-sky-500 text-white",
+  hotel: "bg-violet-500 text-white",
+  auto: "bg-amber-500 text-white",
+  restaurante: "bg-rose-500 text-white",
+  bar: "bg-yellow-500 text-white",
+  disco: "bg-fuchsia-500 text-white",
+  excursion: "bg-emerald-500 text-white",
+  otro: "bg-slate-500 text-white",
+};
+
+const TAB_KINDS = [
+  "vuelo",
+  "hotel",
+  "auto",
+  "restaurante",
+  "bar",
+  "disco",
+  "excursion",
+] as const satisfies readonly (typeof ITEM_KINDS)[number][];
 
 const RESOURCES: {
   name: string;
@@ -68,26 +93,21 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function formatItemTime(
-  startAt: Date | null,
-  endAt: Date | null,
-  full = false
-) {
+function formatItemTime(startAt: Date | null, endAt: Date | null) {
   if (!startAt && !endAt) return null;
   const time = (d: Date) =>
     d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const dateTime = (d: Date) => d.toLocaleString("es-AR");
-  const fmt = full ? dateTime : time;
 
   if (!startAt) return dateTime(new Date(endAt!));
   const start = new Date(startAt);
-  if (!endAt) return fmt(start);
+  if (!endAt) return time(start);
 
   const end = new Date(endAt);
   const sameDay = start.toDateString() === end.toDateString();
   return sameDay
-    ? `${fmt(start)} → ${time(end)}`
-    : `${fmt(start)} → ${dateTime(end)}`;
+    ? `${time(start)} → ${time(end)}`
+    : `${time(start)} → ${dateTime(end)}`;
 }
 
 type ItemRow = {
@@ -129,14 +149,6 @@ function groupByDay(rows: ItemRow[]) {
   return [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, g]) => ({ key, ...g }));
-}
-
-function groupByKind(rows: ItemRow[]) {
-  return ITEM_KINDS.map((kind) => ({
-    key: kind,
-    label: KIND_LABELS[kind],
-    rows: rows.filter((it) => it.kind === kind),
-  })).filter((g) => g.rows.length > 0);
 }
 
 async function createItem(tripId: number, formData: FormData) {
@@ -186,7 +198,10 @@ export default async function TripDetailPage({
 }) {
   const { id } = await params;
   const { view } = await searchParams;
-  const groupedByKind = view === "kind";
+  const activeTab: "all" | (typeof TAB_KINDS)[number] =
+    view && (TAB_KINDS as readonly string[]).includes(view)
+      ? (view as (typeof TAB_KINDS)[number])
+      : "all";
   const tripId = Number(id);
   if (!Number.isFinite(tripId)) notFound();
 
@@ -199,6 +214,11 @@ export default async function TripDetailPage({
     .from(items)
     .where(eq(items.tripId, tripId))
     .orderBy(asc(items.startAt), asc(items.createdAt));
+
+  const filteredItems =
+    activeTab === "all"
+      ? tripItems
+      : tripItems.filter((it) => it.kind === activeTab);
 
   const totalCost = tripItems.reduce(
     (sum, it) => sum + (it.cost ? Number(it.cost) : 0),
@@ -346,61 +366,55 @@ export default async function TripDetailPage({
         </section>
       )}
 
-      <div className="mt-10 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold">Items</h2>
-        {tripItems.length > 0 && (
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+      <h2 className="mt-10 text-lg font-semibold">Items</h2>
+      <div className="-mx-6 mt-3 overflow-x-auto px-6">
+        <div className="flex min-w-max gap-1.5 pb-1">
+          <Link
+            href={`/trips/${tripId}`}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              activeTab === "all"
+                ? "bg-slate-900 text-white"
+                : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
+            }`}
+          >
+            Todos
+          </Link>
+          {TAB_KINDS.map((k) => (
             <Link
-              href={`/trips/${tripId}`}
-              className={`rounded-md px-3 py-1 font-medium transition ${
-                groupedByKind
-                  ? "text-slate-600 hover:text-slate-900"
-                  : "bg-slate-900 text-white"
+              key={k}
+              href={`/trips/${tripId}?view=${k}`}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                activeTab === k
+                  ? KIND_TAB_ACTIVE[k]
+                  : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
               }`}
             >
-              Por día
+              <span className="mr-1">{KIND_ICON[k]}</span>
+              {KIND_PLURAL[k]}
             </Link>
-            <Link
-              href={`/trips/${tripId}?view=kind`}
-              className={`rounded-md px-3 py-1 font-medium transition ${
-                groupedByKind
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Por tipo
-            </Link>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
       {tripItems.length === 0 ? (
-        <p className="mt-3 text-slate-600">
+        <p className="mt-4 text-slate-600">
           Todavía no hay items. Sumá el primero abajo.
+        </p>
+      ) : filteredItems.length === 0 ? (
+        <p className="mt-4 text-slate-600">
+          Todavía no hay {KIND_PLURAL[activeTab as (typeof TAB_KINDS)[number]].toLowerCase()} en este viaje.
         </p>
       ) : (
         <div className="mt-4 space-y-6">
-          {(groupedByKind
-            ? groupByKind(tripItems)
-            : groupByDay(tripItems)
-          ).map(({ key, label, rows }) => (
+          {groupByDay(filteredItems).map(({ key, label, rows }) => (
             <section key={key}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {groupedByKind && (
-                  <span className="mr-1.5 text-base">
-                    {KIND_ICON[key as (typeof ITEM_KINDS)[number]] ?? ""}
-                  </span>
-                )}
                 {label}
               </h3>
               <ul className="space-y-2">
                 {rows.map((it) => {
                   const kind = it.kind as (typeof ITEM_KINDS)[number];
                   const deleteItemBound = deleteItem.bind(null, it.id, tripId);
-                  const timeLabel = formatItemTime(
-                    it.startAt,
-                    it.endAt,
-                    groupedByKind
-                  );
+                  const timeLabel = formatItemTime(it.startAt, it.endAt);
                   return (
                     <li
                       key={it.id}

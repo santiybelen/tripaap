@@ -25,8 +25,10 @@ export const ITEM_KINDS = [
   "vuelo",
   "hotel",
   "auto",
-  "excursion",
   "restaurante",
+  "bar",
+  "disco",
+  "excursion",
   "otro",
 ] as const;
 export type ItemKind = (typeof ITEM_KINDS)[number];
