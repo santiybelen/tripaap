@@ -39,7 +39,7 @@ const RESOURCES: {
     icon: "🎟️",
     description: "Restaurantes, bares y eventos",
     urlFor: (d) =>
-      `https://www.timeout.com/search?query=${encodeURIComponent(d)}`,
+      `https://www.google.com/search?q=${encodeURIComponent(`site:timeout.com ${d}`)}`,
   },
   {
     name: "Wikivoyage",
@@ -60,7 +60,7 @@ const RESOURCES: {
     icon: "⭐",
     description: "Atracciones rankeadas",
     urlFor: (d) =>
-      `https://www.tripadvisor.es/Search?q=${encodeURIComponent(d)}`,
+      `https://www.tripadvisor.com/Search?q=${encodeURIComponent(d)}`,
   },
 ];
 
